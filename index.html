@@ -4034,8 +4034,9 @@ async function deletePhoto(showIdx, photoId){
 
 async function updatePhotoCategory(showIdx, photoId, newCat){
   try{
-    const {error}=await sb.from("media_items").update({categoria:newCat}).eq("id",photoId);
+    const {data,error}=await sb.from("media_items").update({categoria:newCat}).eq("id",photoId).select();
     if(error){ toast("⚠️ Error actualizando categoría: "+error.message); return false; }
+    if(!data||data.length===0){ toast("⚠️ No se actualizó ninguna fila — revisá los permisos (RLS) de UPDATE en media_items"); return false; }
     invalidatePhotoCache(showIdx);
     return true;
   }catch(e){
@@ -4043,7 +4044,6 @@ async function updatePhotoCategory(showIdx, photoId, newCat){
     return false;
   }
 }
-
 async function changePhotoCat(showIdx, photoId, newCat, pref){
   const ok=await updatePhotoCategory(showIdx, photoId, newCat);
   if(ok){
