@@ -3804,7 +3804,12 @@ function updateGuest(showIdx,gi,field,value){
   saveInvitados(showIdx);
   savePresupuesto(showIdx);
   saveCierre(showIdx);
+  const s=SHOWS[showIdx];
+  const isPanel=document.getElementById("panel-overlay").classList.contains("open");
+  if(isPanel){document.getElementById("pnl-tab-body").innerHTML=invitadosHTML(s,showIdx,true);}
+  else if(fullDetailIdx===showIdx){document.getElementById("fd-body").innerHTML=invitadosHTML(s,showIdx,false);}
 }
+
 function addGuest(showIdx){
   if(!SHOWS[showIdx].invitados)SHOWS[showIdx].invitados=[];
   SHOWS[showIdx].invitados.push({nombre:"",rol:"",estado:"Pendiente",pago:0});
