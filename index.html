@@ -271,6 +271,8 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .media-thumb:hover .media-thumb-del{opacity:1;}
 .media-thumb-del:hover{background:var(--r600);}
 .media-cat-badge{position:absolute;top:5px;left:5px;background:rgba(0,0,0,0.5);border-radius:4px;padding:2px 5px;font-size:9px;color:#fff;font-weight:600;}
+.media-cat-badge-sel{border:none;cursor:pointer;font-family:var(--font);appearance:none;-webkit-appearance:none;}
+.media-cat-badge-sel:hover{background:rgba(0,0,0,0.75);}
 .media-lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:999;align-items:center;justify-content:center;flex-direction:column;}
 .media-lightbox.open{display:flex;}
 .media-lightbox img{max-width:90vw;max-height:82vh;border-radius:8px;object-fit:contain;box-shadow:0 20px 60px rgba(0,0,0,0.5);}
@@ -4030,6 +4032,26 @@ async function deletePhoto(showIdx, photoId){
   }
 }
 
+async function updatePhotoCategory(showIdx, photoId, newCat){
+  try{
+    const {error}=await sb.from("media_items").update({categoria:newCat}).eq("id",photoId);
+    if(error){ toast("⚠️ Error actualizando categoría: "+error.message); return false; }
+    invalidatePhotoCache(showIdx);
+    return true;
+  }catch(e){
+    toast("⚠️ Error de conexión actualizando categoría");
+    return false;
+  }
+}
+
+async function changePhotoCat(showIdx, photoId, newCat, pref){
+  const ok=await updatePhotoCategory(showIdx, photoId, newCat);
+  if(ok){
+    await renderMediaGrid(showIdx, pref);
+    toast("✅ Categoría actualizada → "+newCat);
+  }
+}
+
 let _mediaActiveCat="todas";
 let _lbPhotos=[];
 let _lbIdx=0;
@@ -4047,10 +4069,13 @@ function multimediaHTML(s,showIdx,isPanel){
         <span style="font-size:13px;font-weight:700;color:#F5F4FB;">Fotos de locación</span>
         <span class="media-counter" id="${pref}-media-cnt">${cnt} foto${cnt!==1?"s":""}</span>
       </div>
-      ${canUpload?`<div style="display:flex;gap:7px;">
-        <button class="btn" style="font-size:11px;" onclick="document.getElementById('${pref}-file-input').click()">📁 Subir foto(s)</button>
-        <input type="file" id="${pref}-file-input" accept="image/*" multiple style="display:none;" onchange="handleFileUpload(event,${showIdx},'${pref}')">
-      </div>`:""}
+      ${canUpload?`<div style="display:flex;gap:7px;align-items:center;">
+  <select id="${pref}-upload-cat" style="font-size:11px;padding:5px 8px;border-radius:6px;border:0.5px solid var(--border-soft);background:var(--surface);color:#E4E1F7;">
+    ${MEDIA_CATS.map(c=>`<option value="${c}">${c}</option>`).join("")}
+  </select>
+  <button class="btn" style="font-size:11px;" onclick="document.getElementById('${pref}-file-input').click()">📁 Subir foto(s)</button>
+  <input type="file" id="${pref}-file-input" accept="image/*" multiple style="display:none;" onchange="handleFileUpload(event,${showIdx},'${pref}')">
+</div>`:""}
     </div>
     ${canUpload?`
     <div style="margin-bottom:14px;">
@@ -4109,7 +4134,9 @@ async function renderMediaGrid(showIdx, pref){
   grid.innerHTML=filtered.map((p,i)=>`
     <div class="media-thumb" onclick="openLightbox(${i})">
       <img src="${p.src}" alt="${p.label||""}" loading="lazy">
-      <div class="media-cat-badge">${p.cat||"Otros"}</div>
+      ${canUpload?`<select class="media-cat-badge media-cat-badge-sel" onclick="event.stopPropagation()" onchange="event.stopPropagation();changePhotoCat(${showIdx},'${p.id}',this.value,'${pref}')">
+  ${MEDIA_CATS.map(c=>`<option value="${c}" ${c===(p.cat||"Otros")?"selected":""}>${c}</option>`).join("")}
+</select>`:`<div class="media-cat-badge">${p.cat||"Otros"}</div>`}
       <div class="media-thumb-overlay">
         <div class="media-thumb-label">${p.label||p.cat||""}</div>
       </div>
@@ -4148,10 +4175,11 @@ async function processFiles(files, showIdx, pref){
   });
   if(errors.length)toast("⚠️ Archivos omitidos: "+errors.join(", "));
   if(!validFiles.length)return;
-  toast("⏳ Subiendo "+validFiles.length+" foto"+(validFiles.length!==1?"s":"")+"...");
+  const catSel=document.getElementById(pref+'-upload-cat');
+  const cat=catSel?catSel.value:MEDIA_CATS[0];
+  toast("⏳ Subiendo "+validFiles.length+" foto"+(validFiles.length!==1?"s":"")+" a \""+cat+"\"...");
   const uploadErrors=[];
   for(const file of validFiles){
-    const cat=MEDIA_CATS[0]; // "Escenario" por defecto, el usuario puede cambiarlo después
     const result=await savePhotoFile(showIdx, file, cat, file.name.replace(/\.[^.]+$/,""));
     if(!result)uploadErrors.push(file.name);
   }
