@@ -1320,10 +1320,33 @@ function defaultPresupuesto(tipo){
   ]};
 }
 
+// Convierte una fila de la tabla ficha_tecnica al formato que usa el front (camelCase + contactoVenue anidado)
+function fichaRowToFront(row){
+  if(!row)return null;
+  return{
+    sonido:row.sonido||"",
+    luces:row.luces||"",
+    backline:row.backline||"",
+    video:row.video||"",
+    catering:row.catering||"",
+    riderArtista:row.rider_artista||"",
+    notasLibres:row.notas_libres||"",
+    contactoVenue:{
+      nombre:row.contacto_nombre||"",
+      telefono:row.contacto_telefono||"",
+      rol:row.contacto_rol||"",
+    },
+  };
+}
+
 async function loadShows(){
   try{
     const {data,error}=await sb.from("shows").select("*").order("n",{ascending:true});
     if(error){ toast("⚠️ Error cargando shows: "+error.message); return []; }
+    const {data:fichaRows,error:fichaError}=await sb.from("ficha_tecnica").select("*");
+    if(fichaError){ toast("⚠️ Error cargando fichas técnicas: "+fichaError.message); }
+    const fichaByShowId={};
+    (fichaRows||[]).forEach(row=>{ fichaByShowId[row.show_id]=fichaRowToFront(row); });
     let shows=(data||[]).map(row=>({
       id:row.id,            // PK real en Supabase, la necesitamos para guardar cambios en el próximo paso
       n:row.n,
@@ -1339,12 +1362,13 @@ async function loadShows(){
       estado:row.estado,
       vendidas:row.vendidas===null?null:Number(row.vendidas),
       notas:row.notas||"",
+      fichaTecnica:fichaByShowId[row.id]||null,
     }));
     const today=new Date(); today.setHours(0,0,0,0);
-    // Mismo patrón de siempre: lo que todavía no migramos (roadmap, fichaTecnica, presupuesto, cierre) se autocompleta
+    // Mismo patrón de siempre: lo que todavía no migramos (roadmap, presupuesto, cierre) se autocompleta
     shows.forEach(sh=>{
       if(!sh.roadmap)sh.roadmap=freshRoadmapFromPreset(presetKeyForTipo(sh.tipo));
-      if(!sh.fichaTecnica)sh.fichaTecnica=defaultFichaTecnica();
+      if(!sh.fichaTecnica)sh.fichaTecnica=defaultFichaTecnica(); // show sin fila en ficha_tecnica todavía
       if(!sh.presupuesto)sh.presupuesto=defaultPresupuesto(sh.tipo);
       if(!sh.invitados)sh.invitados=[];
       if(!sh.cierre)sh.cierre=defaultCierre();
@@ -2001,13 +2025,39 @@ function panelRoadmapSummaryHTML(s,idx){
 function updateFichaField(idx,field,value){
   if(!SHOWS[idx].fichaTecnica)SHOWS[idx].fichaTecnica=defaultFichaTecnica();
   SHOWS[idx].fichaTecnica[field]=value.trim();
-  saveShows();
+  saveFichaTecnica(idx);
 }
 function updateFichaContacto(idx,field,value){
   if(!SHOWS[idx].fichaTecnica)SHOWS[idx].fichaTecnica=defaultFichaTecnica();
   if(!SHOWS[idx].fichaTecnica.contactoVenue)SHOWS[idx].fichaTecnica.contactoVenue={};
   SHOWS[idx].fichaTecnica.contactoVenue[field]=value.trim();
-  saveShows();
+  saveFichaTecnica(idx);
+}
+// Guarda la ficha técnica del show idx en Supabase (upsert por show_id, requiere unique constraint en show_id)
+async function saveFichaTecnica(idx){
+  const s=SHOWS[idx];
+  if(!s)return;
+  if(!s.id){ toast("⚠️ Guardá el show antes de editar la ficha técnica"); return; }
+  const f=s.fichaTecnica||defaultFichaTecnica();
+  const payload={
+    show_id:s.id,
+    sonido:f.sonido||null,
+    luces:f.luces||null,
+    backline:f.backline||null,
+    video:f.video||null,
+    catering:f.catering||null,
+    rider_artista:f.riderArtista||null,
+    notas_libres:f.notasLibres||null,
+    contacto_nombre:(f.contactoVenue&&f.contactoVenue.nombre)||null,
+    contacto_telefono:(f.contactoVenue&&f.contactoVenue.telefono)||null,
+    contacto_rol:(f.contactoVenue&&f.contactoVenue.rol)||null,
+  };
+  try{
+    const {error}=await sb.from("ficha_tecnica").upsert(payload,{onConflict:"show_id"});
+    if(error){ toast("⚠️ Error guardando ficha técnica: "+error.message); }
+  }catch(e){
+    toast("⚠️ Error de conexión guardando ficha técnica");
+  }
 }
 
 function relatedShowsHTML(s,idx){
@@ -2333,6 +2383,12 @@ async function saveShows(){
         const local=nuevos.find(s=>s.n===row.n && !s.id);
         if(local) local.id=row.id;
       });
+      // Cada show nuevo necesita su fila en ficha_tecnica (1:1) para que el upsert por show_id funcione después
+      const fichaNuevas=nuevos.filter(s=>s.id).map(s=>({show_id:s.id}));
+      if(fichaNuevas.length){
+        const {error:fichaError}=await sb.from("ficha_tecnica").insert(fichaNuevas);
+        if(fichaError){ toast("⚠️ Error creando ficha técnica: "+fichaError.message); }
+      }
     }
     if(existentes.length){
       const {error}=await sb.from("shows").upsert(existentes,{onConflict:"id"});
