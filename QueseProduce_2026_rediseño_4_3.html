@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>QueseProduce · Plataforma de Producción</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -459,10 +457,10 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
   <div class="login-box">
     <div class="login-logo">QueseProduce</div>
     <div class="login-sub">Plataforma de Producción 2026 · Acceso por credenciales</div>
-    <div class="login-label">Email</div>
-<input class="login-input" id="login-name" type="email" placeholder="tu@email.com" autocomplete="off"/>
-<div class="login-label">Contraseña</div>
-<input class="login-input" id="login-pin" type="password" placeholder="••••••••" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <div class="login-label">Tu nombre</div>
+    <input class="login-input" id="login-name" type="text" placeholder="Cómo te llaman en producción" autocomplete="off"/>
+    <div class="login-label">PIN de acceso</div>
+    <input class="login-input" id="login-pin" type="password" placeholder="••••••" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()"/>
     <button class="login-btn" onclick="doLogin()">Entrar →</button>
     <div class="login-error" id="login-error"></div>
   </div>
@@ -1012,10 +1010,6 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
 <div class="toast" id="toast"></div>
 
 <script>
-  // ── SUPABASE CLIENT ──
-const SUPABASE_URL = "https://vrcwsseyhpdtawpdgadt.supabase.co"; // ← reemplazá con tu Project URL
-const SUPABASE_ANON_KEY = "sb_publishable_dA8ubvxBKAqv_o-LCrz9FA_9zD1o1uk";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ── DATA VERSION ──
 // Incrementá este número cada vez que modifiques DEFAULT_SHOWS para forzar reset del localStorage
 const DATA_VERSION = "v11_2";
@@ -1566,56 +1560,38 @@ function loadUsers(){
 }
 function saveUsers(users){localStorage.setItem(AUTH_KEY,JSON.stringify(users));}
 
-async function doLogin(){
-  const email=document.getElementById("login-name").value.trim();
-  const password=document.getElementById("login-pin").value.trim();
+function doLogin(){
+  const name=document.getElementById("login-name").value.trim();
+  const pin=document.getElementById("login-pin").value.trim();
   const err=document.getElementById("login-error");
   err.textContent="";
-  if(!email||!password){err.textContent="Ingresá tu email y contraseña.";return;}
-
-  const {data,error}=await sb.auth.signInWithPassword({email,password});
-  if(error){
-    err.textContent="Email o contraseña incorrectos.";
-    return;
+  if(!name||!pin){err.textContent="Ingresá tu nombre y PIN.";return;}
+  const users=loadUsers();
+  const match=users.find(u=>u.pin===pin);
+  if(!match){err.textContent="PIN incorrecto. Consultá al programador.";return;}
+  // Check expiry
+  if(match.exp){
+    const exp=new Date(match.exp);exp.setHours(23,59,59);
+    if(new Date()>exp){err.textContent="Tu acceso venció el "+match.exp+". Contactá al programador.";return;}
   }
-
-  // Login OK en Auth — ahora traemos el perfil (nombre, rol, vencimiento)
-  const {data:perfil,error:perfilErr}=await sb
-    .from("perfiles")
-    .select("*")
-    .eq("id",data.user.id)
-    .single();
-
-  if(perfilErr||!perfil){
-    err.textContent="No se encontró tu perfil. Contactá al programador.";
-    await sb.auth.signOut();
-    return;
-  }
-
-  // Vencimiento
-  if(perfil.exp){
-    const exp=new Date(perfil.exp);exp.setHours(23,59,59);
-    if(new Date()>exp){
-      err.textContent="Tu acceso venció el "+perfil.exp+". Contactá al programador.";
-      await sb.auth.signOut();
-      return;
-    }
-  }
-
-  currentUser={id:perfil.id,loginName:perfil.nombre,nombre:perfil.nombre,rol:perfil.rol,exp:perfil.exp,nota:perfil.nota};
-
-  // Log de sesión (no crítico si falla)
-  sb.from("sesiones").insert({perfil_id:perfil.id}).then(()=>{});
-
+  // Log session entry
+  const sessions=JSON.parse(localStorage.getItem("qp_sessions")||"[]");
+  sessions.unshift({nombre:name,rol:match.rol,pin:match.pin,ts:new Date().toISOString()});
+  localStorage.setItem("qp_sessions",JSON.stringify(sessions.slice(0,20)));
+  // Set session
+  currentUser={...match,loginName:name};
+  localStorage.setItem(SESSION_KEY,JSON.stringify(currentUser));
   document.getElementById("login-screen").style.display="none";
   enterApp();
 }
-async function doLogout(){
+
+function doLogout(){
   if(!confirm("¿Cerrar sesión?"))return;
-  await sb.auth.signOut();
   currentUser=null;
+  localStorage.removeItem(SESSION_KEY);
   location.reload();
 }
+
 function applyRoleRestrictions(){
   if(!currentUser)return;
   const role=ROLE_DEFS[currentUser.rol]||ROLE_DEFS.tecnico;
@@ -4291,23 +4267,20 @@ setTimeout(()=>window.print(),600);
 applyStoredEdits();
 
 // Check for existing session or show login
-(async function initAuth(){
+(function initAuth(){
   document.getElementById("landing").style.display="none";
   document.getElementById("app").style.display="none";
-
-  const {data:{session}}=await sb.auth.getSession();
-  if(session){
-    const {data:perfil}=await sb.from("perfiles").select("*").eq("id",session.user.id).single();
-    if(perfil){
-      currentUser={id:perfil.id,loginName:perfil.nombre,nombre:perfil.nombre,rol:perfil.rol,exp:perfil.exp,nota:perfil.nota};
+  const saved=localStorage.getItem(SESSION_KEY);
+  if(saved){
+    try{
+      currentUser=JSON.parse(saved);
       document.getElementById("login-screen").style.display="none";
       enterApp();
       return;
-    }
+    }catch(e){}
   }
   document.getElementById("login-screen").style.display="flex";
 })();
 </script>
 </body>
 </html>
-
