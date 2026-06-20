@@ -4415,7 +4415,7 @@ function openNewContenidoForShow(showIdx){
 }
 
 function openEditContenido(id){
-  const item=CONTENIDO.find(c=>c.id===id);
+  const item=CONTENIDO.find(c=>String(c.id)===String(id));
   if(!item)return;
   cdEditingId=id;
   document.getElementById('cd-modal-title').textContent='Editar pieza';
@@ -4451,7 +4451,7 @@ function saveContenido(){
   if(cdEditingId!=null){
     // Edición: preservar id
     item.id=cdEditingId;
-    const idx=CONTENIDO.findIndex(c=>c.id===cdEditingId);
+    const idx=CONTENIDO.findIndex(c=>String(c.id)===String(cdEditingId));
     if(idx>=0)CONTENIDO[idx]=item;
   } else {
     // Alta: id lo asigna Supabase después del persistContenido()
@@ -4466,7 +4466,7 @@ function saveContenido(){
 
 function deleteCd(id){
   if(!confirm('¿Eliminar esta pieza de contenido?'))return;
-  CONTENIDO=CONTENIDO.filter(c=>c.id!==id);
+  CONTENIDO=CONTENIDO.filter(c=>String(c.id)!==String(id));
   saveContenidoData(); // borra+reinserta todo → el deleted queda afuera
   buildContenido();
   renderFullDetailIfOpen();
