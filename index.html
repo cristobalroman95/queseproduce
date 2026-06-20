@@ -1365,7 +1365,6 @@ function loadPresets(){
   try{const s=localStorage.getItem('qp_presets');return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULT_PRESETS_ROADMAP));}catch(e){return JSON.parse(JSON.stringify(DEFAULT_PRESETS_ROADMAP));}
 }
 function savePresets(){try{localStorage.setItem('qp_presets',JSON.stringify(PRESETS_ROADMAP));}catch(e){}}
-function saveShows(){try{localStorage.setItem('qp_shows',JSON.stringify(SHOWS));}catch(e){}}
 
 let PRESETS_ROADMAP = loadPresets();
 let SHOWS = [];
@@ -2274,6 +2273,42 @@ function openEditShow(idx){
 function clearForm(){["f-nombre","f-venue","f-ciudad","f-fecha","f-aforo","f-obj","f-ticket","f-vendidas","f-notas"].forEach(id=>document.getElementById(id).value="");document.getElementById("f-hora").value="20:00";}
 function closeModal(){document.getElementById("modal-overlay").classList.remove("open");}
 function closeModalOvl(e){if(e.target===document.getElementById("modal-overlay"))closeModal();}
+function saveShow(){
+  const nombre=document.getElementById("f-nombre").value.trim();
+  if(!nombre){toast("⚠️ Ingresá el nombre del show");return;}
+  const show={
+    nombre,tipo:document.getElementById("f-tipo").value,estado:document.getElementById("f-estado").value,
+    venue:document.getElementById("f-venue").value||"Por confirmar",ciudad:document.getElementById("f-ciudad").value||"Ciudad A",
+    fecha:document.getElementById("f-fecha").value,hora:document.getElementById("f-hora").value||"20:00",
+    aforo:parseInt(document.getElementById("f-aforo").value)||0,
+    obj:parseFloat(document.getElementById("f-obj").value)||0.85,
+    ticket:parseInt(document.getElementById("f-ticket").value)||0,
+    vendidas:document.getElementById("f-vendidas").value?parseInt(document.getElementById("f-vendidas").value):null,
+    notas:document.getElementById("f-notas").value,
+  };
+  if(editingIdx!==null){
+    // Preservamos roadmap y ficha técnica existentes — editar datos generales no debe borrar el trabajo de preproducción ya hecho.
+    show.id=SHOWS[editingIdx].id;
+    show.n=SHOWS[editingIdx].n;
+    show.roadmap=SHOWS[editingIdx].roadmap;
+    show.fichaTecnica=SHOWS[editingIdx].fichaTecnica;
+    show.presupuesto=SHOWS[editingIdx].presupuesto;
+    show.invitados=SHOWS[editingIdx].invitados||[];
+    show.cierre=SHOWS[editingIdx].cierre||defaultCierre();
+    SHOWS[editingIdx]=show;
+    toast("✅ Show actualizado");
+  } else {
+    show.n=SHOWS.length+1;
+    show.roadmap=freshRoadmapFromPreset(presetKeyForTipo(show.tipo));
+    show.fichaTecnica=defaultFichaTecnica();
+    show.presupuesto=defaultPresupuesto(show.tipo);
+    show.invitados=[];
+    show.cierre=defaultCierre();
+    SHOWS.push(show);
+    toast("✅ Show agregado — se le asignó una hoja de ruta según su tipo");
+  }
+  saveShows();buildShows();buildDash();buildPlanner();updateHeader();closeModal();
+}
 
 async function saveShows(){
   try{
