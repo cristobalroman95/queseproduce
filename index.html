@@ -3616,6 +3616,12 @@ function updatePresupItem(showIdx,ci,ii,field,value){
   if(field==="monto")item.monto=parseFloat(value)||0;
   else item.desc=value.trim();
   savePresupuesto(showIdx);
+  // Re-render current view para que el subtotal/total se actualicen sin esperar un F5
+  const s=SHOWS[showIdx];
+  const isPanel=document.getElementById("pnl-tab-body");
+  const isPanelActive=isPanel&&document.getElementById("panel-overlay").classList.contains("open");
+  if(isPanelActive){document.getElementById("pnl-tab-body").innerHTML=presupuestoShowHTML(s,showIdx,true);}
+  else if(fullDetailIdx===showIdx){document.getElementById("fd-body").innerHTML=presupuestoShowHTML(s,showIdx,false);}
   // Rebuild consolidado if visible
   if(document.getElementById("presup-consolidado-body")&&document.getElementById("pt-consolidado").style.display!=="none")buildPresupConsolidado();
 }
