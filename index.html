@@ -1381,6 +1381,18 @@ async function loadShows(){
       cats[catIndex[row.categoria_key]].items.push({desc:row.descripcion||"",monto:Number(row.monto)||0});
     });
     const {data:cierreRows,error:cierreError}=await sb.from("cierre_items").select("*").order("id",{ascending:true});
+    const {data:invRows,error:invError}=await sb.from("invitados").select("*").order("id",{ascending:true});
+if(invError){ toast("⚠️ Error cargando invitados: "+invError.message); }
+const invitadosByShowId={};
+(invRows||[]).forEach(row=>{
+  if(!invitadosByShowId[row.show_id])invitadosByShowId[row.show_id]=[];
+  invitadosByShowId[row.show_id].push({
+    nombre: row.nombre||"",
+    rol:    row.rol||"",
+    estado: row.estado||"Pendiente",
+    pago:   Number(row.pago)||0,
+  });
+});
     if(cierreError){ toast("⚠️ Error cargando cierres: "+cierreError.message); }
     const cierreCategoriasByShowId={};
     const cierreCatIndexByShowId={};
@@ -1413,6 +1425,7 @@ async function loadShows(){
       roadmap:roadmapByShowId[row.id]||null,
       presupuesto:presupCategoriasByShowId[row.id]?{categorias:presupCategoriasByShowId[row.id]}:null,
       cierre:cierreCategoriasByShowId[row.id]?{categorias:cierreCategoriasByShowId[row.id]}:null,
+      invitados:invitadosByShowId[row.id]||null,
     }));
     const today=new Date(); today.setHours(0,0,0,0);
     // Mismo patrón de siempre: lo que todavía no migramos (presupuesto, cierre) se autocompleta
@@ -2470,6 +2483,36 @@ function saveCierre(showIdx){
   cierreSaveChain=cierreSaveChain.then(()=>persistCierre(show)).catch(()=>{});
   return cierreSaveChain;
 }
+// Mismo patrón que roadmap/presupuesto/cierre: borramos todas las filas del show y reinsertamos desde el estado en memoria.
+async function persistInvitados(show){
+  if(!show||!show.id)return;
+  try{
+    const {error:delErr}=await sb.from("invitados").delete().eq("show_id",show.id);
+    if(delErr){ toast("⚠️ Error borrando invitados previos: "+delErr.message); return; }
+    const invs=show.invitados||[];
+    if(!invs.length)return;
+    const payload=invs.map(g=>({
+      show_id:show.id,
+      nombre:g.nombre||"",
+      rol:g.rol||"",
+      estado:g.estado||"Pendiente",
+      pago:g.pago||0,
+    }));
+    const {error:insErr}=await sb.from("invitados").insert(payload);
+    if(insErr){ toast("⚠️ Error guardando invitados: "+insErr.message); }
+  }catch(e){
+    toast("⚠️ Error de conexión guardando invitados");
+  }
+}
+let invitadosSaveChain=Promise.resolve();
+function saveInvitados(showIdx){
+  const show=SHOWS[showIdx];
+  if(!show)return;
+  if(!show.id){ toast("⚠️ Guardá el show antes de editar los invitados"); return; }
+  invitadosSaveChain=invitadosSaveChain.then(()=>persistInvitados(show)).catch(()=>{});
+  return invitadosSaveChain;
+}
+
 function editSectionTitle(idx,si,value){
   SHOWS[idx].roadmap[si].s=value.trim();
   saveRoadmap(idx);
@@ -3751,7 +3794,6 @@ function invitadosHTML(s,idx,compact){
       <p style="font-size:10px;color:#bbb;margin-top:8px;">Los campos se guardan automáticamente al hacer clic afuera. Solo los invitados <strong>Confirmados</strong> se suman al presupuesto y cierre (categoría RRHH).</p>
     </div>`;
 }
-
 function updateGuest(showIdx,gi,field,value){
   if(!SHOWS[showIdx].invitados)SHOWS[showIdx].invitados=[];
   const g=SHOWS[showIdx].invitados[gi];
@@ -3759,13 +3801,17 @@ function updateGuest(showIdx,gi,field,value){
   if(field==="pago")g.pago=parseFloat(value)||0;
   else g[field]=value.trim()?value.trim():(field==="estado"?"Pendiente":value);
   syncInvitadosToPresupuesto(showIdx);
-  saveShows();
+  saveInvitados(showIdx);
+  savePresupuesto(showIdx);
+  saveCierre(showIdx);
 }
 function addGuest(showIdx){
   if(!SHOWS[showIdx].invitados)SHOWS[showIdx].invitados=[];
   SHOWS[showIdx].invitados.push({nombre:"",rol:"",estado:"Pendiente",pago:0});
   syncInvitadosToPresupuesto(showIdx);
-  saveShows();
+  saveInvitados(showIdx);
+  savePresupuesto(showIdx);
+  saveCierre(showIdx);
   const s=SHOWS[showIdx];
   const isPanel=document.getElementById("panel-overlay").classList.contains("open");
   if(isPanel){document.getElementById("pnl-tab-body").innerHTML=invitadosHTML(s,showIdx,true);}
@@ -3776,7 +3822,9 @@ function removeGuest(showIdx,gi){
   if(!SHOWS[showIdx].invitados)return;
   SHOWS[showIdx].invitados.splice(gi,1);
   syncInvitadosToPresupuesto(showIdx);
-  saveShows();
+  saveInvitados(showIdx);
+  savePresupuesto(showIdx);
+  saveCierre(showIdx);
   const s=SHOWS[showIdx];
   const isPanel=document.getElementById("panel-overlay").classList.contains("open");
   if(isPanel){document.getElementById("pnl-tab-body").innerHTML=invitadosHTML(s,showIdx,true);}
@@ -3831,7 +3879,9 @@ function syncInvitadosToPresupuesto(showIdx){
 
 function forceSyncInvitados(showIdx){
   syncInvitadosToPresupuesto(showIdx);
-  saveShows();
+  saveInvitados(showIdx);
+  savePresupuesto(showIdx);
+  saveCierre(showIdx);
   const s=SHOWS[showIdx];
   const isPanel=document.getElementById("panel-overlay").classList.contains("open");
   if(isPanel){document.getElementById("pnl-tab-body").innerHTML=invitadosHTML(s,showIdx,true);}
