@@ -1347,6 +1347,23 @@ async function loadShows(){
     if(fichaError){ toast("⚠️ Error cargando fichas técnicas: "+fichaError.message); }
     const fichaByShowId={};
     (fichaRows||[]).forEach(row=>{ fichaByShowId[row.show_id]=fichaRowToFront(row); });
+    const {data:secRows,error:secError}=await sb.from("roadmap_secciones").select("*").order("orden",{ascending:true});
+    if(secError){ toast("⚠️ Error cargando secciones de hoja de ruta: "+secError.message); }
+    const {data:taskRows,error:taskError}=await sb.from("roadmap_tasks").select("*").order("orden",{ascending:true});
+    if(taskError){ toast("⚠️ Error cargando tareas de hoja de ruta: "+taskError.message); }
+    const tasksBySeccionId={};
+    (taskRows||[]).forEach(t=>{
+      if(!tasksBySeccionId[t.seccion_id])tasksBySeccionId[t.seccion_id]=[];
+      tasksBySeccionId[t.seccion_id].push({
+        i:t.hora_inicio||"", f:t.hora_fin||"", area:t.area||"",
+        act:t.actividad||"", det:t.detalle||"", est:t.estado||"Pendiente",
+      });
+    });
+    const roadmapByShowId={};
+    (secRows||[]).forEach(sec=>{
+      if(!roadmapByShowId[sec.show_id])roadmapByShowId[sec.show_id]=[];
+      roadmapByShowId[sec.show_id].push({s:sec.titulo, tasks:tasksBySeccionId[sec.id]||[]});
+    });
     let shows=(data||[]).map(row=>({
       id:row.id,            // PK real en Supabase, la necesitamos para guardar cambios en el próximo paso
       n:row.n,
@@ -1363,11 +1380,12 @@ async function loadShows(){
       vendidas:row.vendidas===null?null:Number(row.vendidas),
       notas:row.notas||"",
       fichaTecnica:fichaByShowId[row.id]||null,
+      roadmap:roadmapByShowId[row.id]||null,
     }));
     const today=new Date(); today.setHours(0,0,0,0);
-    // Mismo patrón de siempre: lo que todavía no migramos (roadmap, presupuesto, cierre) se autocompleta
+    // Mismo patrón de siempre: lo que todavía no migramos (presupuesto, cierre) se autocompleta
     shows.forEach(sh=>{
-      if(!sh.roadmap)sh.roadmap=freshRoadmapFromPreset(presetKeyForTipo(sh.tipo));
+      if(!sh.roadmap)sh.roadmap=freshRoadmapFromPreset(presetKeyForTipo(sh.tipo)); // show sin filas en roadmap_secciones todavía
       if(!sh.fichaTecnica)sh.fichaTecnica=defaultFichaTecnica(); // show sin fila en ficha_tecnica todavía
       if(!sh.presupuesto)sh.presupuesto=defaultPresupuesto(sh.tipo);
       if(!sh.invitados)sh.invitados=[];
@@ -2285,19 +2303,76 @@ function fullDetailRoadmapHTML(s,idx){
         </div>
       </div>`).join("")}`;
 }
+// ── ROADMAP: persistencia en Supabase ──
+// Estrategia: borrar todas las secciones/tareas del show e insertar de nuevo desde el estado actual en memoria.
+// Es más simple que un diff incremental y totalmente asumible con el volumen de filas de esta app (pocas decenas por show).
+async function persistRoadmap(show){
+  if(!show||!show.id)return;
+  try{
+    const {data:oldSecs,error:selErr}=await sb.from("roadmap_secciones").select("id").eq("show_id",show.id);
+    if(selErr){ toast("⚠️ Error leyendo hoja de ruta previa: "+selErr.message); return; }
+    const oldSecIds=(oldSecs||[]).map(r=>r.id);
+    if(oldSecIds.length){
+      const {error:delTasksErr}=await sb.from("roadmap_tasks").delete().in("seccion_id",oldSecIds);
+      if(delTasksErr){ toast("⚠️ Error borrando tareas previas: "+delTasksErr.message); return; }
+      const {error:delSecsErr}=await sb.from("roadmap_secciones").delete().in("id",oldSecIds);
+      if(delSecsErr){ toast("⚠️ Error borrando secciones previas: "+delSecsErr.message); return; }
+    }
+    const secciones=show.roadmap||[];
+    if(!secciones.length)return;
+    const secPayload=secciones.map((sec,si)=>({show_id:show.id,titulo:sec.s,orden:si+1}));
+    const {data:newSecs,error:insSecErr}=await sb.from("roadmap_secciones").insert(secPayload).select();
+    if(insSecErr){ toast("⚠️ Error guardando secciones: "+insSecErr.message); return; }
+    const secIdByOrden={};
+    (newSecs||[]).forEach(r=>{ secIdByOrden[r.orden]=r.id; });
+    const taskPayload=[];
+    secciones.forEach((sec,si)=>{
+      const seccionId=secIdByOrden[si+1];
+      if(!seccionId)return;
+      (sec.tasks||[]).forEach((t,ti)=>{
+        taskPayload.push({
+          seccion_id:seccionId,
+          hora_inicio:t.i||null,
+          hora_fin:t.f||null,
+          area:t.area||null,
+          actividad:t.act||null,
+          detalle:t.det||null,
+          estado:t.est||"Pendiente",
+          orden:ti+1,
+        });
+      });
+    });
+    if(taskPayload.length){
+      const {error:insTaskErr}=await sb.from("roadmap_tasks").insert(taskPayload);
+      if(insTaskErr){ toast("⚠️ Error guardando tareas: "+insTaskErr.message); }
+    }
+  }catch(e){
+    toast("⚠️ Error de conexión guardando hoja de ruta");
+  }
+}
+// Encadenamos los guardados para que dos ediciones rápidas (ej. dos campos perdiendo foco seguido)
+// no pisen sus respectivos borrar+reinsertar a mitad de camino.
+let roadmapSaveChain=Promise.resolve();
+function saveRoadmap(showIdx){
+  const show=SHOWS[showIdx];
+  if(!show)return;
+  if(!show.id){ toast("⚠️ Guardá el show antes de editar la hoja de ruta"); return; }
+  roadmapSaveChain=roadmapSaveChain.then(()=>persistRoadmap(show)).catch(()=>{});
+  return roadmapSaveChain;
+}
 function editSectionTitle(idx,si,value){
   SHOWS[idx].roadmap[si].s=value.trim();
-  saveShows();
+  saveRoadmap(idx);
 }
 function addSection(idx){
   SHOWS[idx].roadmap.push({s:"🆕  Nueva sección",tasks:[{i:"",f:"",area:"",act:"Nueva tarea",det:"",est:"Pendiente"}]});
-  saveShows();renderFullDetailIfOpen();
+  saveRoadmap(idx);renderFullDetailIfOpen();
   toast("➕ Sección agregada");
 }
 function removeSection(idx,si){
   if(!confirm("¿Eliminar esta sección completa y todas sus tareas?"))return;
   SHOWS[idx].roadmap.splice(si,1);
-  saveShows();renderFullDetailIfOpen();
+  saveRoadmap(idx);renderFullDetailIfOpen();
 }
 
 // ── MODAL NUEVO/EDITAR SHOW ──
@@ -2389,6 +2464,9 @@ async function saveShows(){
         const {error:fichaError}=await sb.from("ficha_tecnica").insert(fichaNuevas);
         if(fichaError){ toast("⚠️ Error creando ficha técnica: "+fichaError.message); }
       }
+      // Guardamos también la hoja de ruta (preset asignado en saveShow) de cada show nuevo
+      const roadmapInserts=nuevos.filter(s=>s.id&&s.roadmap&&s.roadmap.length).map(s=>persistRoadmap(s));
+      if(roadmapInserts.length)await Promise.all(roadmapInserts);
     }
     if(existentes.length){
       const {error}=await sb.from("shows").upsert(existentes,{onConflict:"id"});
@@ -2458,22 +2536,22 @@ function updateTask(showIdx,si,ti,sel){
   sel.setAttribute("style",tskC(est));
   const row=document.getElementById(`tr-${si}-${ti}`);
   if(row)row.style.opacity=est==="Listo"?"0.45":est==="Cancelado"?"0.3":"1";
-  saveShows();toast(est==="Listo"?"✅ Tarea completada":"Estado → "+est);
+  saveRoadmap(showIdx);toast(est==="Listo"?"✅ Tarea completada":"Estado → "+est);
 }
 function editTaskField(showIdx,si,ti,field,value){
   SHOWS[showIdx].roadmap[si].tasks[ti][field]=value.trim();
-  saveShows();
+  saveRoadmap(showIdx);
 }
 function addTask(showIdx,si){
   SHOWS[showIdx].roadmap[si].tasks.push({i:"",f:"",area:"",act:"Nueva tarea",det:"",est:"Pendiente"});
-  saveShows();
+  saveRoadmap(showIdx);
   if(document.getElementById("roadmap-body"))buildRoadmap(showIdx);
   renderFullDetailIfOpen();
   toast("➕ Tarea agregada — editá los campos directamente");
 }
 function removeTask(showIdx,si,ti){
   SHOWS[showIdx].roadmap[si].tasks.splice(ti,1);
-  saveShows();
+  saveRoadmap(showIdx);
   if(document.getElementById("roadmap-body"))buildRoadmap(showIdx);
   renderFullDetailIfOpen();
 }
@@ -2510,7 +2588,7 @@ function applyPresetToShow(presetKey){
   if(pendingPresetShowIdx===null)return;
   const apply=()=>{
     SHOWS[pendingPresetShowIdx].roadmap=freshRoadmapFromPreset(presetKey);
-    saveShows();
+    saveRoadmap(pendingPresetShowIdx);
     if(document.getElementById("rm-show-select"))buildRoadmapSelect();
     if(typeof renderFullDetailIfOpen==='function')renderFullDetailIfOpen();
     toast("✅ Preset aplicado a "+SHOWS[pendingPresetShowIdx].nombre);
@@ -2527,7 +2605,7 @@ function applyDuplicateToShow(sourceIdx){
     SHOWS[pendingPresetShowIdx].roadmap=JSON.parse(JSON.stringify(SHOWS[sourceIdx].roadmap));
     // Reseteamos los estados a Pendiente para no heredar el progreso del show original
     SHOWS[pendingPresetShowIdx].roadmap.forEach(sec=>sec.tasks.forEach(t=>t.est="Pendiente"));
-    saveShows();
+    saveRoadmap(pendingPresetShowIdx);
     if(document.getElementById("rm-show-select"))buildRoadmapSelect();
     if(typeof renderFullDetailIfOpen==='function')renderFullDetailIfOpen();
     toast("✅ Hoja de ruta duplicada de "+SHOWS[sourceIdx].nombre);
