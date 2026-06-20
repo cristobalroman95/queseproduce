@@ -623,6 +623,7 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
         <select id="cd-view-sel" class="btn" style="font-size:11px;" onchange="buildContenido()">
           <option value="kanban">Vista kanban (semanas)</option>
           <option value="lista">Vista lista</option>
+          <option value="gantt">Vista timeline (Gantt)</option>
         </select>
         <button class="btn btn-primary" onclick="openNewContenido()">+ Nueva pieza</button>
       </div>
@@ -922,7 +923,8 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
             <option>Artista</option>
           </select>
         </div>
-        <div class="form-group"><label>Fecha objetivo</label><input type="date" id="cd-f-fecha"></div>
+        <div class="form-group"><label>Fecha inicio (producción)</label><input type="date" id="cd-f-fecha-inicio"></div>
+        <div class="form-group"><label>Fecha objetivo (publicación)</label><input type="date" id="cd-f-fecha"></div>
         <div class="form-group"><label>Show vinculado (opcional)</label>
           <select id="cd-f-show">
             <option value="">— Sin show asociado —</option>
@@ -4330,13 +4332,14 @@ async function loadContenido(){
     const showIdToIdx={};
     SHOWS.forEach((s,i)=>{ if(s.id)showIdToIdx[s.id]=i; });
     return (data||[]).map(row=>({
-      id:        row.id,          // INTEGER de Supabase
+      id:        row.id,
       nombre:    row.nombre||"",
       tipo:      row.tipo||"Reel promo",
       plataforma:row.plataforma||"IG + TikTok",
       estado:    row.estado||"Idea",
       responsable:row.responsable||"Editor",
       fecha:     row.fecha||"",
+      fechaInicio: row.fecha_inicio||"",
       showIdx:   row.show_id!=null ? (showIdToIdx[row.show_id]??null) : null,
       url:       row.url||"",
       notas:     row.notas||"",
@@ -4356,13 +4359,14 @@ async function persistContenido(){
     if(delErr){ toast("⚠️ Error borrando contenido previo: "+delErr.message); return; }
     // 2. Reinsertar desde memoria (sin incluir id para que Supabase lo genere)
     if(!CONTENIDO.length)return;
-    const payload=CONTENIDO.map(item=>({
+      const payload=CONTENIDO.map(item=>({
       nombre:     item.nombre||"",
       tipo:       item.tipo||"Reel promo",
       plataforma: item.plataforma||"IG + TikTok",
       estado:     item.estado||"Idea",
       responsable:item.responsable||"Editor",
       fecha:      item.fecha||null,
+      fecha_inicio: item.fechaInicio||null,
       show_id:    item.showIdx!=null ? (SHOWS[item.showIdx]?.id||null) : null,
       url:        item.url||"",
       notas:      item.notas||"",
@@ -4457,6 +4461,122 @@ function weekLabel(d){
   return mon.toLocaleDateString('es-CL',opts)+' – '+sun.toLocaleDateString('es-CL',opts);
 }
 
+function cdGanttColor(tipo){
+  const map={
+    'Reel promo':'#1D9E75',
+    'Paid ad':'#BA7517',
+    'Orgánico':'#6C5CE7',
+    'Stream / clip':'#378ADD',
+    'Viral':'#E04B3A',
+    'Canje / collab':'#8E88B5',
+    'Otro':'#8077B0',
+  };
+  return map[tipo]||'#8077B0';
+}
+
+const GANTT_DAY_WIDTH=30;
+const GANTT_ROW_HEIGHT=42;
+
+function buildContenidoGantt(items){
+  const body=document.getElementById('cd-body');
+  const withDates=items.filter(it=>it.fecha||it.fechaInicio);
+  const withoutDates=items.length-withDates.length;
+
+  if(!withDates.length){
+    body.innerHTML+=`<div class="card" style="text-align:center;color:#bbb;padding:40px;margin-top:14px;">Ninguna pieza tiene fecha asignada todavía. Agregá una fecha de inicio y/o fecha objetivo para verla en el timeline.</div>`;
+    return;
+  }
+
+  const resolved=withDates.map(it=>{
+    let ini=it.fechaInicio?new Date(it.fechaInicio+'T12:00:00'):null;
+    let fin=it.fecha?new Date(it.fecha+'T12:00:00'):null;
+    if(!ini)ini=fin;
+    if(!fin)fin=ini;
+    if(fin<ini){const tmp=ini;ini=fin;fin=tmp;}
+    return{item:it,ini,fin};
+  });
+
+  let minDate=new Date(Math.min(...resolved.map(r=>r.ini)));
+  let maxDate=new Date(Math.max(...resolved.map(r=>r.fin)));
+  const today=new Date();today.setHours(12,0,0,0);
+  if(today<minDate)minDate=new Date(today);
+  if(today>maxDate)maxDate=new Date(today);
+  minDate.setDate(minDate.getDate()-2);
+  maxDate.setDate(maxDate.getDate()+2);
+  minDate.setHours(12,0,0,0);maxDate.setHours(12,0,0,0);
+
+  const totalDays=Math.round((maxDate-minDate)/(1000*60*60*24))+1;
+  const totalWidth=totalDays*GANTT_DAY_WIDTH;
+
+  const dayCells=[];
+  const monthGroups=[];
+  let curMonth=null,curStart=0,curCount=0;
+  for(let d=0;d<totalDays;d++){
+    const date=new Date(minDate);date.setDate(minDate.getDate()+d);
+    const isWeekend=date.getDay()===0||date.getDay()===6;
+    const isToday=date.toDateString()===today.toDateString();
+    dayCells.push(`<div style="width:${GANTT_DAY_WIDTH}px;flex-shrink:0;text-align:center;font-size:9px;color:${isToday?'#fff':'#9690C2'};background:${isToday?'var(--c400)':isWeekend?'rgba(255,255,255,0.04)':'transparent'};font-weight:${isToday?'700':'400'};border-radius:${isToday?'4px':'0'};padding:2px 0;">${date.getDate()}</div>`);
+    const monthLabel=date.toLocaleDateString('es-CL',{month:'short'}).toUpperCase().replace('.','');
+    if(monthLabel!==curMonth){
+      if(curMonth!==null)monthGroups.push({label:curMonth,start:curStart,count:curCount});
+      curMonth=monthLabel;curStart=d;curCount=1;
+    } else curCount++;
+  }
+  monthGroups.push({label:curMonth,start:curStart,count:curCount});
+  const monthHTML=monthGroups.map(m=>`<div style="position:absolute;left:${m.start*GANTT_DAY_WIDTH}px;width:${m.count*GANTT_DAY_WIDTH}px;font-size:10px;font-weight:700;color:#B7B2DA;text-transform:uppercase;letter-spacing:0.5px;padding:4px 0 3px 4px;border-left:1px solid var(--border-soft);">${m.label}</div>`).join('');
+
+  const todayOffset=Math.round((today-minDate)/(1000*60*60*24));
+  const todayLineLeft=todayOffset*GANTT_DAY_WIDTH+GANTT_DAY_WIDTH/2;
+
+  const labelsHTML=resolved.map(({item})=>`
+    <div onclick="openEditContenido('${item.id}')" style="height:${GANTT_ROW_HEIGHT}px;display:flex;align-items:center;padding:0 10px;font-size:11px;color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${item.nombre}</div>`).join('');
+
+  const barsHTML=resolved.map(({item,ini,fin},i)=>{
+    const offsetDays=Math.round((ini-minDate)/(1000*60*60*24));
+    const durDays=Math.round((fin-ini)/(1000*60*60*24))+1;
+    const left=offsetDays*GANTT_DAY_WIDTH+2;
+    const width=Math.max(durDays*GANTT_DAY_WIDTH-4,GANTT_DAY_WIDTH-4);
+    const color=cdGanttColor(item.tipo);
+    const top=i*GANTT_ROW_HEIGHT+8;
+    const isPub=item.estado==='Publicado';
+    return`<div onclick="openEditContenido('${item.id}')" title="${item.nombre} · ${fmtDate(item.fecha||item.fechaInicio)}" style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${GANTT_ROW_HEIGHT-16}px;background:${color};opacity:${isPub?0.55:0.9};border-radius:6px;cursor:pointer;display:flex;align-items:center;padding:0 8px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${cdEstEmoji(item.estado)} ${item.nombre}</div>`;
+  }).join('');
+
+  const weekendStripes=dayCells.map((_,d)=>{
+    const date=new Date(minDate);date.setDate(minDate.getDate()+d);
+    const isWeekend=date.getDay()===0||date.getDay()===6;
+    if(!isWeekend)return'';
+    return`<div style="position:absolute;left:${d*GANTT_DAY_WIDTH}px;top:0;width:${GANTT_DAY_WIDTH}px;height:100%;background:rgba(255,255,255,0.025);"></div>`;
+  }).join('');
+
+  const bodyHeight=resolved.length*GANTT_ROW_HEIGHT;
+
+  body.innerHTML+=`
+    ${withoutDates>0?`<div style="font-size:11px;color:#aaa;margin:10px 0;">⚠️ ${withoutDates} pieza${withoutDates!==1?'s':''} sin fecha asignada no se muestra${withoutDates!==1?'n':''} en el timeline.</div>`:''}
+    <div style="display:flex;border:0.5px solid var(--border-soft);border-radius:8px;overflow:hidden;margin-top:14px;">
+      <div style="width:200px;flex-shrink:0;background:var(--surface2);border-right:1px solid var(--border-soft);">
+        <div style="height:42px;border-bottom:1px solid var(--border-soft);"></div>
+        ${labelsHTML}
+      </div>
+      <div style="flex:1;overflow-x:auto;">
+        <div style="position:relative;width:${totalWidth}px;">
+          <div style="height:42px;border-bottom:1px solid var(--border-soft);position:relative;background:var(--surface2);">
+            ${monthHTML}
+            <div style="position:absolute;top:18px;left:0;display:flex;">${dayCells.join('')}</div>
+          </div>
+          <div style="position:relative;height:${bodyHeight}px;">
+            ${weekendStripes}
+            <div style="position:absolute;left:${todayLineLeft}px;top:0;width:2px;height:100%;background:var(--c400);z-index:2;"></div>
+            ${barsHTML}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:10px;color:#9690C2;">
+      ${CD_TIPOS.map(t=>`<span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:${cdGanttColor(t)};display:inline-block;"></span>${t}</span>`).join('')}
+    </div>`;
+}
+
 function buildContenido(){
   const body=document.getElementById('cd-body');
   if(!body)return;
@@ -4497,6 +4617,9 @@ function buildContenido(){
       </div>`;
     }).join('');
     body.innerHTML=statsHTML+`<div class="cd-kanban">${cols||'<div class="cd-empty">No hay piezas de contenido todavía. ¡Agregá la primera!</div>'}</div>`;
+  }  else if(view==='gantt'){
+    body.innerHTML=statsHTML;
+    buildContenidoGantt(items);
   } else {
     // Lista
     if(!items.length){body.innerHTML=statsHTML+`<div class="card"><div class="cd-empty">No hay piezas que coincidan con el filtro.</div></div>`;return;}
@@ -4552,6 +4675,7 @@ function openNewContenido(){
   document.getElementById('cd-f-estado').value='Idea';
   document.getElementById('cd-f-responsable').value='Editor';
   document.getElementById('cd-f-fecha').value='';
+  document.getElementById('cd-f-fecha-inicio').value='';
   document.getElementById('cd-f-url').value='';
   document.getElementById('cd-f-notas').value='';
   // Populate show select
@@ -4579,6 +4703,7 @@ function openEditContenido(id){
   document.getElementById('cd-f-estado').value=item.estado||'Idea';
   document.getElementById('cd-f-responsable').value=item.responsable||'Editor';
   document.getElementById('cd-f-fecha').value=item.fecha||'';
+  document.getElementById('cd-f-fecha-inicio').value=item.fechaInicio||'';
   document.getElementById('cd-f-url').value=item.url||'';
   document.getElementById('cd-f-notas').value=item.notas||'';
   const sel=document.getElementById('cd-f-show');
@@ -4591,17 +4716,18 @@ function saveContenido(){
   const nombre=document.getElementById('cd-f-nombre').value.trim();
   if(!nombre){toast('⚠️ Ingresá un nombre para la pieza');return;}
   const showVal=document.getElementById('cd-f-show').value;
-  const item={
-    nombre,
-    tipo:       document.getElementById('cd-f-tipo').value,
-    plataforma: document.getElementById('cd-f-plataforma').value,
-    estado:     document.getElementById('cd-f-estado').value,
-    responsable:document.getElementById('cd-f-responsable').value,
-    fecha:      document.getElementById('cd-f-fecha').value,
-    showIdx:    showVal!==''?parseInt(showVal):null,
-    url:        document.getElementById('cd-f-url').value.trim(),
-    notas:      document.getElementById('cd-f-notas').value.trim(),
-  };
+      const item={
+      nombre,
+      tipo:       document.getElementById('cd-f-tipo').value,
+      plataforma: document.getElementById('cd-f-plataforma').value,
+      estado:     document.getElementById('cd-f-estado').value,
+      responsable:document.getElementById('cd-f-responsable').value,
+      fecha:      document.getElementById('cd-f-fecha').value,
+      fechaInicio: document.getElementById('cd-f-fecha-inicio').value,
+      showIdx:    showVal!==''?parseInt(showVal):null,
+      url:        document.getElementById('cd-f-url').value.trim(),
+      notas:      document.getElementById('cd-f-notas').value.trim(),
+    };
   if(cdEditingId!=null){
     // Edición: preservar id
     item.id=cdEditingId;
