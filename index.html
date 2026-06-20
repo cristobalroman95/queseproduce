@@ -2312,16 +2312,21 @@ function saveShow(){
 
 async function saveShows(){
   try{
-    const flatten=s=>({
+    const flattenInsert=s=>({
+      n:s.n,nombre:s.nombre,venue:s.venue,ciudad:s.ciudad,
+      fecha:s.fecha,hora:s.hora,aforo:s.aforo,ticket:s.ticket,obj:s.obj,
+      tipo:s.tipo,estado:s.estado,vendidas:s.vendidas,notas:s.notas,
+    });
+    const flattenUpdate=s=>({
       id:s.id,n:s.n,nombre:s.nombre,venue:s.venue,ciudad:s.ciudad,
       fecha:s.fecha,hora:s.hora,aforo:s.aforo,ticket:s.ticket,obj:s.obj,
       tipo:s.tipo,estado:s.estado,vendidas:s.vendidas,notas:s.notas,
     });
     const nuevos=SHOWS.filter(s=>!s.id);
-    const existentes=SHOWS.filter(s=>s.id).map(flatten);
+    const existentes=SHOWS.filter(s=>s.id).map(flattenUpdate);
 
     if(nuevos.length){
-      const {data,error}=await sb.from("shows").insert(nuevos.map(flatten)).select();
+      const {data,error}=await sb.from("shows").insert(nuevos.map(flattenInsert)).select();
       if(error){ toast("⚠️ Error guardando shows nuevos: "+error.message); return; }
       // Le asignamos a cada show nuevo el id real que generó Supabase
       data.forEach(row=>{
