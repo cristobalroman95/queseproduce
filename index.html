@@ -1757,7 +1757,8 @@ async function enterApp(){
   const l=document.getElementById("landing");
   if(l)l.style.display="none";
   document.getElementById("app").style.display="flex";
-  SHOWS = await loadShows();
+   SHOWS = await loadShows();
+  CONTENIDO = await loadContenido(); // carga después de SHOWS para tener el mapa showId→idx
   // Build all data-driven sections now that DOM is visible and user is known
   buildShows();
   buildDash();
@@ -2215,7 +2216,7 @@ function fullDetailInfoHTML(s,idx){
 
 // ── CONTENIDO DIGITAL VINCULADO AL SHOW ──
 function fullDetailContenidoHTML(s,idx){
-  const items=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).filter(c=>c.showId===idx);
+  const items=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).filter(c=>c.showIdx===idx);
   const pub=items.filter(c=>c.estado==='Publicado').length;
   const prod=items.filter(c=>c.estado==='En producción').length;
   const listo=items.filter(c=>c.estado==='Listo para publicar').length;
@@ -2832,7 +2833,7 @@ function coordShowStatus(s,idx){
   const presupPersonalizado=!!s.presupuesto;
 
   // Contenido digital vinculado
-  const items=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).filter(c=>c.showId===idx);
+  const items=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).filter(c=>c.showIdx===idx);
   const pub=items.filter(c=>c.estado==='Publicado').length;
   const pendientes=items.length-pub;
 
@@ -4153,29 +4154,80 @@ let cdEditingId = null;
 let cdActiveFilter = 'todos';
 
 const DEFAULT_CONTENIDO = [
-  {id:'cd1',nombre:'Reel promo Show Especial',tipo:'Reel promo',plataforma:'IG + TikTok',estado:'En producción',responsable:'Editor',fecha:'2026-06-17',showId:8,url:'',notas:'Destacar invitados. Música con energía.'},
-  {id:'cd2',nombre:'Story countdown Show Especial 3 días',tipo:'Orgánico',plataforma:'Instagram',estado:'Idea',responsable:'Community Manager',fecha:'2026-06-18',showId:8,url:'',notas:''},
-  {id:'cd3',nombre:'Pauta Meta Ads — Show Especial semana previa',tipo:'Paid ad',plataforma:'Meta Ads',estado:'Listo para publicar',responsable:'Marketing',fecha:'2026-06-15',showId:8,url:'',notas:'Budget $150k. Segmentar 25-40 años.'},
-  {id:'cd4',nombre:'Clip highlight post-show Show Especial',tipo:'Stream / clip',plataforma:'IG + TikTok',estado:'Idea',responsable:'Editor',fecha:'2026-06-22',showId:8,url:'',notas:'Mejores momentos, max 60s'},
-  {id:'cd5',nombre:'Contenido viral semana 23 jun',tipo:'Viral',plataforma:'TikTok',estado:'Idea',responsable:'Community Manager',fecha:'2026-06-23',showId:null,url:'',notas:'Tendencia de la semana, sin forzar show'},
-  {id:'cd6',nombre:'Canje con marca bebidas',tipo:'Canje / collab',plataforma:'Instagram',estado:'En producción',responsable:'Marketing',fecha:'2026-06-25',showId:null,url:'',notas:'Confirmar con brand manager'},
-  {id:'cd7',nombre:'Reel promo Teatro Municipal 1',tipo:'Reel promo',plataforma:'IG + TikTok',estado:'Idea',responsable:'Editor',fecha:'2026-07-07',showId:9,url:'',notas:''},
-  {id:'cd8',nombre:'Pauta Meta Ads — Teatro Municipal 1',tipo:'Paid ad',plataforma:'Meta Ads',estado:'Idea',responsable:'Marketing',fecha:'2026-07-06',showId:9,url:'',notas:''},
-  {id:'cd9',nombre:'Story making-of ensayo Teatro Municipal',tipo:'Orgánico',plataforma:'Instagram',estado:'Idea',responsable:'Community Manager',fecha:'2026-07-09',showId:9,url:'',notas:''},
-  {id:'cd10',nombre:'Contenido viral semana 30 jun',tipo:'Viral',plataforma:'TikTok',estado:'Idea',responsable:'Community Manager',fecha:'2026-06-30',showId:null,url:'',notas:''},
+  {id:'cd1',nombre:'Reel promo Show Especial',tipo:'Reel promo',plataforma:'IG + TikTok',estado:'En producción',responsable:'Editor',fecha:'2026-06-17',showIdx:8,url:'',notas:'Destacar invitados. Música con energía.'},
+  {id:'cd2',nombre:'Story countdown Show Especial 3 días',tipo:'Orgánico',plataforma:'Instagram',estado:'Idea',responsable:'Community Manager',fecha:'2026-06-18',showIdx:8,url:'',notas:''},
+  {id:'cd3',nombre:'Pauta Meta Ads — Show Especial semana previa',tipo:'Paid ad',plataforma:'Meta Ads',estado:'Listo para publicar',responsable:'Marketing',fecha:'2026-06-15',showIdx:8,url:'',notas:'Budget $150k. Segmentar 25-40 años.'},
+  {id:'cd4',nombre:'Clip highlight post-show Show Especial',tipo:'Stream / clip',plataforma:'IG + TikTok',estado:'Idea',responsable:'Editor',fecha:'2026-06-22',showIdx:8,url:'',notas:'Mejores momentos, max 60s'},
+  {id:'cd5',nombre:'Contenido viral semana 23 jun',tipo:'Viral',plataforma:'TikTok',estado:'Idea',responsable:'Community Manager',fecha:'2026-06-23',showIdx:null,url:'',notas:'Tendencia de la semana, sin forzar show'},
+  {id:'cd6',nombre:'Canje con marca bebidas',tipo:'Canje / collab',plataforma:'Instagram',estado:'En producción',responsable:'Marketing',fecha:'2026-06-25',showIdx:null,url:'',notas:'Confirmar con brand manager'},
+  {id:'cd7',nombre:'Reel promo Teatro Municipal 1',tipo:'Reel promo',plataforma:'IG + TikTok',estado:'Idea',responsable:'Editor',fecha:'2026-07-07',showIdx:9,url:'',notas:''},
+  {id:'cd8',nombre:'Pauta Meta Ads — Teatro Municipal 1',tipo:'Paid ad',plataforma:'Meta Ads',estado:'Idea',responsable:'Marketing',fecha:'2026-07-06',showIdx:9,url:'',notas:''},
+  {id:'cd9',nombre:'Story making-of ensayo Teatro Municipal',tipo:'Orgánico',plataforma:'Instagram',estado:'Idea',responsable:'Community Manager',fecha:'2026-07-09',showIdx:9,url:'',notas:''},
+  {id:'cd10',nombre:'Contenido viral semana 30 jun',tipo:'Viral',plataforma:'TikTok',estado:'Idea',responsable:'Community Manager',fecha:'2026-06-30',showIdx:null,url:'',notas:''},
 ];
 
-let CONTENIDO = loadContenido();
+let CONTENIDO = []; // se carga async en enterApp() después de loadShows()
 
-function loadContenido(){
+async function loadContenido(){
   try{
-    const s=localStorage.getItem(CD_STORAGE_KEY);
-    return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULT_CONTENIDO));
-  }catch(e){return JSON.parse(JSON.stringify(DEFAULT_CONTENIDO));}
+    const {data,error}=await sb.from("contenido_digital").select("*").order("id",{ascending:true});
+    if(error){ toast("⚠️ Error cargando contenido digital: "+error.message); return []; }
+    // Construimos mapa supabaseShowId → índice de array para reconstruir showIdx
+    const showIdToIdx={};
+    SHOWS.forEach((s,i)=>{ if(s.id)showIdToIdx[s.id]=i; });
+    return (data||[]).map(row=>({
+      id:        row.id,          // INTEGER de Supabase
+      nombre:    row.nombre||"",
+      tipo:      row.tipo||"Reel promo",
+      plataforma:row.plataforma||"IG + TikTok",
+      estado:    row.estado||"Idea",
+      responsable:row.responsable||"Editor",
+      fecha:     row.fecha||"",
+      showIdx:   row.show_id!=null ? (showIdToIdx[row.show_id]??null) : null,
+      url:       row.url||"",
+      notas:     row.notas||"",
+    }));
+  }catch(e){
+    toast("⚠️ Error de conexión cargando contenido digital");
+    return [];
+  }
 }
+
+// Persistencia: borra todas las filas e inserta desde el estado en memoria
+// (mismo patrón que roadmap/presupuesto/cierre para máxima consistencia)
+async function persistContenido(){
+  try{
+    // 1. Borrar todo
+    const {error:delErr}=await sb.from("contenido_digital").delete().neq("id",0);
+    if(delErr){ toast("⚠️ Error borrando contenido previo: "+delErr.message); return; }
+    // 2. Reinsertar desde memoria (sin incluir id para que Supabase lo genere)
+    if(!CONTENIDO.length)return;
+    const payload=CONTENIDO.map(item=>({
+      nombre:     item.nombre||"",
+      tipo:       item.tipo||"Reel promo",
+      plataforma: item.plataforma||"IG + TikTok",
+      estado:     item.estado||"Idea",
+      responsable:item.responsable||"Editor",
+      fecha:      item.fecha||null,
+      show_id:    item.showIdx!=null ? (SHOWS[item.showIdx]?.id||null) : null,
+      url:        item.url||"",
+      notas:      item.notas||"",
+    }));
+    const {data:inserted,error:insErr}=await sb.from("contenido_digital").insert(payload).select();
+    if(insErr){ toast("⚠️ Error guardando contenido digital: "+insErr.message); return; }
+    // Actualizar ids en memoria con los generados por Supabase
+    (inserted||[]).forEach((row,i)=>{ if(CONTENIDO[i])CONTENIDO[i].id=row.id; });
+  }catch(e){
+    toast("⚠️ Error de conexión guardando contenido digital");
+  }
+}
+
+let contenidoSaveChain=Promise.resolve();
 function saveContenidoData(){
-  try{localStorage.setItem(CD_STORAGE_KEY,JSON.stringify(CONTENIDO));}catch(e){}
+  contenidoSaveChain=contenidoSaveChain.then(()=>persistContenido()).catch(()=>{});
+  return contenidoSaveChain;
 }
+
 
 function cdTipoClass(tipo){
   if(tipo==='Reel promo')return'cd-tipo-reel';
@@ -4295,14 +4347,14 @@ function buildContenido(){
     // Lista
     if(!items.length){body.innerHTML=statsHTML+`<div class="card"><div class="cd-empty">No hay piezas que coincidan con el filtro.</div></div>`;return;}
     const rows=items.map(item=>{
-      const show=item.showId!=null?SHOWS.find((_,i)=>i===item.showId):null;
+      const show=item.showIdx!=null?SHOWS[item.showIdx]:null;
       return`<tr onclick="openEditContenido('${item.id}')">
         <td style="padding-left:14px;font-weight:500;">${item.nombre}</td>
         <td><span class="cd-tipo-pill ${cdTipoClass(item.tipo)}">${item.tipo}</span></td>
         <td>${item.plataforma}</td>
         <td>${item.fecha?fmtDate(item.fecha):'—'}</td>
         <td>${item.responsable}</td>
-        <td>${show?`<span style="font-size:10px;color:var(--p600);cursor:pointer;" onclick="event.stopPropagation();goToShowDetailFull(${item.showId},'cdshow')">↗ ${show.nombre}</span>`:'—'}</td>
+        <td>${show?`<span style="font-size:10px;color:var(--p600);cursor:pointer;" onclick="event.stopPropagation();goToShowDetailFull(${item.showIdx},'cdshow')">↗ ${show.nombre}</span>`:'—'}</td>
         <td><span class="cd-est-pill ${cdEstClass(item.estado)}">${cdEstEmoji(item.estado)} ${item.estado}</span></td>
         <td><button class="btn" style="font-size:10px;padding:3px 8px;" onclick="event.stopPropagation();deleteCd('${item.id}')">✕</button></td>
       </tr>`;
@@ -4317,7 +4369,7 @@ function buildContenido(){
 }
 
 function cdCardHTML(item){
-  const show=item.showId!=null?SHOWS.find((_,i)=>i===item.showId):null;
+  const show=item.showIdx!=null?SHOWS[item.showIdx]:null;
   const urlLink=item.url?`<a href="${item.url}" onclick="event.stopPropagation()" target="_blank" style="font-size:10px;color:var(--b600);">🔗 Ver</a>`:'';
   return`<div class="cd-card" onclick="openEditContenido('${item.id}')">
     <div class="cd-card-top">
@@ -4333,7 +4385,7 @@ function cdCardHTML(item){
       <span>👤 ${item.responsable}</span>
       ${urlLink}
     </div>
-    ${show?`<div class="cd-card-show" onclick="event.stopPropagation();goToShowDetailFull(${item.showId},'cdshow')" style="cursor:pointer;">↗ ${show.nombre}</div>`:''}
+    ${show?`<div class="cd-card-show" onclick="event.stopPropagation();goToShowDetailFull(${item.showIdx},'cdshow')" style="cursor:pointer;">↗ ${show.nombre}</div>`:''}
   </div>`;
 }
 
@@ -4377,7 +4429,7 @@ function openEditContenido(id){
   document.getElementById('cd-f-notas').value=item.notas||'';
   const sel=document.getElementById('cd-f-show');
   sel.innerHTML='<option value="">— Sin show asociado —</option>'+SHOWS.map((s,i)=>`<option value="${i}">${s.nombre}</option>`).join('');
-  sel.value=item.showId!=null?item.showId:'';
+    sel.value=item.showIdx!=null?item.showIdx:'';
   document.getElementById('cd-modal-overlay').classList.add('open');
 }
 
@@ -4386,34 +4438,36 @@ function saveContenido(){
   if(!nombre){toast('⚠️ Ingresá un nombre para la pieza');return;}
   const showVal=document.getElementById('cd-f-show').value;
   const item={
-    id:cdEditingId||('cd'+Date.now()),
     nombre,
-    tipo:document.getElementById('cd-f-tipo').value,
-    plataforma:document.getElementById('cd-f-plataforma').value,
-    estado:document.getElementById('cd-f-estado').value,
+    tipo:       document.getElementById('cd-f-tipo').value,
+    plataforma: document.getElementById('cd-f-plataforma').value,
+    estado:     document.getElementById('cd-f-estado').value,
     responsable:document.getElementById('cd-f-responsable').value,
-    fecha:document.getElementById('cd-f-fecha').value,
-    showId:showVal!==''?parseInt(showVal):null,
-    url:document.getElementById('cd-f-url').value.trim(),
-    notas:document.getElementById('cd-f-notas').value.trim(),
+    fecha:      document.getElementById('cd-f-fecha').value,
+    showIdx:    showVal!==''?parseInt(showVal):null,
+    url:        document.getElementById('cd-f-url').value.trim(),
+    notas:      document.getElementById('cd-f-notas').value.trim(),
   };
-  if(cdEditingId){
+  if(cdEditingId!=null){
+    // Edición: preservar id
+    item.id=cdEditingId;
     const idx=CONTENIDO.findIndex(c=>c.id===cdEditingId);
     if(idx>=0)CONTENIDO[idx]=item;
   } else {
+    // Alta: id lo asigna Supabase después del persistContenido()
     CONTENIDO.push(item);
   }
   saveContenidoData();
   closeCdModal();
   buildContenido();
   renderFullDetailIfOpen();
-  toast(cdEditingId?'✅ Pieza actualizada':'✅ Pieza agregada');
+  toast(cdEditingId!=null?'✅ Pieza actualizada':'✅ Pieza agregada');
 }
 
 function deleteCd(id){
   if(!confirm('¿Eliminar esta pieza de contenido?'))return;
   CONTENIDO=CONTENIDO.filter(c=>c.id!==id);
-  saveContenidoData();
+  saveContenidoData(); // borra+reinserta todo → el deleted queda afuera
   buildContenido();
   renderFullDetailIfOpen();
   toast('🗑 Pieza eliminada');
