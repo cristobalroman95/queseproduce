@@ -1870,15 +1870,15 @@ function openPanel(idx){
   document.getElementById("pnl-sub").textContent=s.venue+" · "+s.ciudad;
   const allowed=getAllowedShowTabs();
   const tabDefs=[
-    {key:"resumen",id:"pt-resumen-btn",arg:"resumen",label:"📋 Resumen"},
-    {key:"info",id:"pt-info-btn",arg:"info",label:"Info"},
-    {key:"ficha",id:"pt-ficha-btn",arg:"ficha",label:"Ficha técnica"},
-    {key:"roadmap",id:"pt-rm-btn",arg:"rm",label:"Hoja de ruta"},
-    {key:"presupuesto",id:"pt-pres-btn",arg:"presupuesto",label:"Presupuesto"},
-    {key:"invitados",id:"pt-inv-btn",arg:"invitados",label:"Invitados"},
-    {key:"cierre",id:"pt-cierre-btn",arg:"cierre",label:"Cierre"},
-    {key:"multimedia",id:"pt-media-btn",arg:"multimedia",label:"📷 Fotos"}
-  ];
+  {key:"resumen",id:"pt-resumen-btn",arg:"resumen",label:"📋 Resumen"},
+  {key:"info",id:"pt-info-btn",arg:"info",label:"ℹ️ Info"},
+  {key:"ficha",id:"pt-ficha-btn",arg:"ficha",label:"📝 Ficha técnica"},
+  {key:"roadmap",id:"pt-rm-btn",arg:"rm",label:"🗺 Hoja de ruta"},
+  {key:"presupuesto",id:"pt-pres-btn",arg:"presupuesto",label:"💰 Presupuesto"},
+  {key:"invitados",id:"pt-inv-btn",arg:"invitados",label:"🎫 Invitados"},
+  {key:"cierre",id:"pt-cierre-btn",arg:"cierre",label:"📊 Cierre"},
+  {key:"multimedia",id:"pt-media-btn",arg:"multimedia",label:"📷 Fotos"}
+];
   const tabsHTML=tabDefs.filter(t=>allowed.includes(t.key)).map(t=>
     `<button class="pnl-tab" id="${t.id}" onclick="panelTab('${t.arg}',${idx})">${t.label}</button>`
   ).join("");
@@ -2071,15 +2071,15 @@ function panelRoadmapSummaryHTML(s,idx){
   return`
     <div class="ps">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span style="font-size:11px;color:#888;">${doneTasks} / ${totalTasks} tareas completadas</span>
+        <span style="font-size:11px;color:#9690C2;">${doneTasks} / ${totalTasks} tareas completadas</span>
         ${ro?"":` <button class="btn" style="font-size:10px;" onclick="openPresetPicker(${idx})">📋 Cambiar preset</button>`}
       </div>
       ${secciones.map(sec=>`
         <div style="margin-bottom:10px;">
-          <div style="font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">${sec.s}</div>
-          ${sec.tasks.map(t=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid #f5f4f1;">
-            <span style="color:${t.est==='Listo'?'#bbb':'#333'};${t.est==='Listo'?'text-decoration:line-through;':''}">${t.act}</span>
-            <span style="font-size:10px;color:#aaa;">${t.i||""}</span>
+          <div style="font-size:10px;font-weight:700;color:#B7B2DA;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">${sec.s}</div>
+          ${sec.tasks.map(t=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:0.5px solid var(--border-soft);">
+            <span style="color:${t.est==='Listo'?'#7A74A8':'#F5F4FB'};${t.est==='Listo'?'text-decoration:line-through;':''}">${t.act}</span>
+            <span style="font-size:10px;color:#9690C2;">${t.i||""}</span>
           </div>`).join("")}
         </div>`).join("")}
       <button class="btn btn-primary" style="width:100%;margin-top:6px;" onclick="goToShowDetailFull(${idx},'roadmap')">⤢ Ver hoja de ruta completa</button>
