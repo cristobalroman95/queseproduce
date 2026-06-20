@@ -1320,25 +1320,34 @@ function defaultPresupuesto(tipo){
   ]};
 }
 
-function loadShows(){
+async function loadShows(){
   try{
-    // Si la versión del código cambió, wipear shows guardados y usar los DEFAULT
-    const storedVersion = localStorage.getItem(DATA_VERSION_KEY);
-    if(storedVersion !== DATA_VERSION){
-      localStorage.removeItem('qp_shows');
-      localStorage.setItem(DATA_VERSION_KEY, DATA_VERSION);
-    }
-    const s=localStorage.getItem('qp_shows');
-    let shows=s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULT_SHOWS));
+    const {data,error}=await sb.from("shows").select("*").order("n",{ascending:true});
+    if(error){ toast("⚠️ Error cargando shows: "+error.message); return []; }
+    let shows=(data||[]).map(row=>({
+      id:row.id,            // PK real en Supabase, la necesitamos para guardar cambios en el próximo paso
+      n:row.n,
+      nombre:row.nombre,
+      venue:row.venue,
+      ciudad:row.ciudad,
+      fecha:row.fecha,
+      hora:row.hora,
+      aforo:row.aforo,
+      ticket:Number(row.ticket),
+      obj:Number(row.obj),
+      tipo:row.tipo,
+      estado:row.estado,
+      vendidas:row.vendidas===null?null:Number(row.vendidas),
+      notas:row.notas||"",
+    }));
     const today=new Date(); today.setHours(0,0,0,0);
-    // Migración: si un show no tiene roadmap/fichaTecnica propios (datos viejos), se los creamos
+    // Mismo patrón de siempre: lo que todavía no migramos (roadmap, fichaTecnica, presupuesto, cierre) se autocompleta
     shows.forEach(sh=>{
       if(!sh.roadmap)sh.roadmap=freshRoadmapFromPreset(presetKeyForTipo(sh.tipo));
       if(!sh.fichaTecnica)sh.fichaTecnica=defaultFichaTecnica();
       if(!sh.presupuesto)sh.presupuesto=defaultPresupuesto(sh.tipo);
       if(!sh.invitados)sh.invitados=[];
       if(!sh.cierre)sh.cierre=defaultCierre();
-      // Auto-marcar como Realizado si la fecha ya pasó y el estado no fue cerrado manualmente
       if(sh.fecha){
         const fd=new Date(sh.fecha); fd.setHours(23,59,59);
         if(fd<today && (sh.estado==="Confirmado"||sh.estado==="Tentativo"||sh.estado==="En proceso")){
@@ -1347,7 +1356,10 @@ function loadShows(){
       }
     });
     return shows;
-  }catch(e){return JSON.parse(JSON.stringify(DEFAULT_SHOWS));}
+  }catch(e){
+    toast("⚠️ Error de conexión cargando shows");
+    return [];
+  }
 }
 function loadPresets(){
   try{const s=localStorage.getItem('qp_presets');return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULT_PRESETS_ROADMAP));}catch(e){return JSON.parse(JSON.stringify(DEFAULT_PRESETS_ROADMAP));}
@@ -1356,7 +1368,7 @@ function savePresets(){try{localStorage.setItem('qp_presets',JSON.stringify(PRES
 function saveShows(){try{localStorage.setItem('qp_shows',JSON.stringify(SHOWS));}catch(e){}}
 
 let PRESETS_ROADMAP = loadPresets();
-let SHOWS = loadShows();
+let SHOWS = [];
 let editingIdx = null;
 let activeShowIdx = null; // show actualmente abierto en la vista de detalle completo
 
@@ -1608,7 +1620,7 @@ async function doLogin(){
   sb.from("sesiones").insert({perfil_id:perfil.id}).then(()=>{});
 
   document.getElementById("login-screen").style.display="none";
-  enterApp();
+  await enterApp();
 }
 async function doLogout(){
   if(!confirm("¿Cerrar sesión?"))return;
@@ -1670,10 +1682,11 @@ function enterAppFromLanding(){
   enterApp();
 }
 
-function enterApp(){
+async function enterApp(){
   const l=document.getElementById("landing");
   if(l)l.style.display="none";
   document.getElementById("app").style.display="flex";
+  SHOWS = await loadShows();
   // Build all data-driven sections now that DOM is visible and user is known
   buildShows();
   buildDash();
@@ -4301,7 +4314,7 @@ applyStoredEdits();
     if(perfil){
       currentUser={id:perfil.id,loginName:perfil.nombre,nombre:perfil.nombre,rol:perfil.rol,exp:perfil.exp,nota:perfil.nota};
       document.getElementById("login-screen").style.display="none";
-      enterApp();
+      await enterApp();
       return;
     }
   }
