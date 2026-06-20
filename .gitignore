@@ -1,0 +1,18 @@
+# Dependencias de Node (cuando instalemos Supabase más adelante)
+node_modules/
+
+# Variables secretas — NUNCA subir a internet
+.env
+.env.local
+.env.production
+
+# Archivos temporales de Supabase CLI
+supabase/.temp/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
