@@ -3924,28 +3924,110 @@ function removeUser(idx){
 
 // ── MULTIMEDIA ──
 const MEDIA_CATS = ["Escenario","Camarines","Acceso / Ingreso","Locación general","Otros"];
-const MAX_PHOTO_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_PHOTO_BYTES = 49 * 1024 * 1024; // 49 MB (límite del bucket)
+const STORAGE_BUCKET = 'show-media';
 
-function mediaKey(showIdx, photoId){ return "qp_photo_"+SHOWS[showIdx].n+"_"+photoId; }
-function mediaIndexKey(showIdx){ return "qp_photos_idx_"+SHOWS[showIdx].n; }
+// Cache en memoria de fotos por showIdx para no re-fetchear en cada render
+const _photoCache = {};
 
-function loadPhotoIndex(showIdx){
-  try{ const r=localStorage.getItem(mediaIndexKey(showIdx)); return r?JSON.parse(r):[]; }catch(e){ return []; }
+async function loadPhotos(showIdx){
+  if(_photoCache[showIdx])return _photoCache[showIdx];
+  const show=SHOWS[showIdx];
+  if(!show||!show.id)return[];
+  try{
+    const {data,error}=await sb.from("media_items").select("*").eq("show_id",show.id).order("created_at",{ascending:true});
+    if(error){ toast("⚠️ Error cargando fotos: "+error.message); return[]; }
+    const photos=(data||[]).map(row=>({
+      id:      String(row.id),
+      cat:     row.categoria||"Otros",
+      label:   row.label||"",
+      src:     row.url,
+      tipo:    row.tipo||"file",
+      storagePath: row.storage_path||null,
+      ts:      row.created_at||"",
+    }));
+    _photoCache[showIdx]=photos;
+    return photos;
+  }catch(e){
+    toast("⚠️ Error de conexión cargando fotos");
+    return[];
+  }
 }
-function savePhotoIndex(showIdx, arr){
-  try{ localStorage.setItem(mediaIndexKey(showIdx), JSON.stringify(arr)); }catch(e){}
+
+function invalidatePhotoCache(showIdx){ delete _photoCache[showIdx]; }
+
+async function savePhotoFile(showIdx, file, cat, label){
+  const show=SHOWS[showIdx];
+  if(!show||!show.id){ toast("⚠️ Show sin id, guardá el show primero"); return null; }
+  const ext=file.name.split('.').pop()||'jpg';
+  const path=`shows/${show.id}/${Date.now()}_${Math.random().toString(36).slice(2,6)}.${ext}`;
+  try{
+    // 1. Subir al bucket
+    const {error:upErr}=await sb.storage.from(STORAGE_BUCKET).upload(path, file, {contentType:file.type,upsert:false});
+    if(upErr){ toast("⚠️ Error subiendo foto: "+upErr.message); return null; }
+    // 2. Obtener URL pública
+    const {data:urlData}=sb.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+    const url=urlData.publicUrl;
+    // 3. Insertar metadata en media_items
+    const {data:row,error:insErr}=await sb.from("media_items").insert({
+      show_id:      show.id,
+      categoria:    cat||"Otros",
+      label:        label||file.name.replace(/\.[^.]+$/,""),
+      url:          url,
+      storage_path: path,
+      tipo:         "file",
+    }).select().single();
+    if(insErr){ toast("⚠️ Error guardando metadata: "+insErr.message); return null; }
+    const photo={id:String(row.id),cat:row.categoria||"Otros",label:row.label||"",src:row.url,tipo:"file",storagePath:path,ts:row.created_at||""};
+    invalidatePhotoCache(showIdx);
+    return photo;
+  }catch(e){
+    toast("⚠️ Error de conexión subiendo foto");
+    return null;
+  }
 }
-function loadPhoto(showIdx, photoId){
-  try{ const r=localStorage.getItem(mediaKey(showIdx,photoId)); return r?JSON.parse(r):null; }catch(e){ return null; }
+
+async function savePhotoUrl(showIdx, url, cat){
+  const show=SHOWS[showIdx];
+  if(!show||!show.id){ toast("⚠️ Show sin id"); return null; }
+  try{
+    const {data:row,error}=await sb.from("media_items").insert({
+      show_id:   show.id,
+      categoria: cat||"Otros",
+      label:     url.split("/").pop().split("?")[0]||"Imagen URL",
+      url:       url,
+      storage_path: null,
+      tipo:      "url",
+    }).select().single();
+    if(error){ toast("⚠️ Error guardando URL: "+error.message); return null; }
+    const photo={id:String(row.id),cat:row.categoria||"Otros",label:row.label||"",src:row.url,tipo:"url",storagePath:null,ts:row.created_at||""};
+    invalidatePhotoCache(showIdx);
+    return photo;
+  }catch(e){
+    toast("⚠️ Error de conexión guardando URL");
+    return null;
+  }
 }
-function savePhoto(showIdx, meta, dataUrl){
-  try{ localStorage.setItem(mediaKey(showIdx,meta.id), JSON.stringify({...meta, src:dataUrl})); return true; }
-  catch(e){ return false; }
-}
-function deletePhoto(showIdx, photoId){
-  const idx=loadPhotoIndex(showIdx).filter(id=>id!==photoId);
-  savePhotoIndex(showIdx,idx);
-  try{ localStorage.removeItem(mediaKey(showIdx,photoId)); }catch(e){}
+
+async function deletePhoto(showIdx, photoId){
+  try{
+    // Buscar el storage_path en cache
+    const photos=_photoCache[showIdx]||[];
+    const photo=photos.find(p=>p.id===String(photoId));
+    // Si tiene storage_path, borrar del bucket
+    if(photo&&photo.storagePath){
+      const {error:stErr}=await sb.storage.from(STORAGE_BUCKET).remove([photo.storagePath]);
+      if(stErr)console.warn("No se pudo borrar del bucket:",stErr.message);
+    }
+    // Borrar de media_items
+    const {error}=await sb.from("media_items").delete().eq("id",photoId);
+    if(error){ toast("⚠️ Error borrando foto: "+error.message); return false; }
+    invalidatePhotoCache(showIdx);
+    return true;
+  }catch(e){
+    toast("⚠️ Error de conexión borrando foto");
+    return false;
+  }
 }
 
 let _mediaActiveCat="todas";
@@ -3998,18 +4080,19 @@ function initMultimediaZone(showIdx, isPanel){
   renderMediaGrid(showIdx, pref);
 }
 
-function renderMediaGrid(showIdx, pref){
+async function renderMediaGrid(showIdx, pref){
   const grid=document.getElementById(pref+"-media-grid");
   const cntEl=document.getElementById(pref+"-media-cnt");
   if(!grid)return;
-  const index=loadPhotoIndex(showIdx);
-  const photos=index.map(id=>loadPhoto(showIdx,id)).filter(Boolean);
+  // Mostrar loading mientras carga
+  grid.innerHTML=`<div class="media-empty" style="grid-column:1/-1;color:#666;">Cargando fotos...</div>`;
+  const photos=await loadPhotos(showIdx);
   const canUpload=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;
   const filtered=_mediaActiveCat==="todas"?photos:photos.filter(p=>p.cat===_mediaActiveCat);
 
-  if(cntEl){ const cnt=index.length; cntEl.textContent=cnt+" foto"+(cnt!==1?"s":""); }
+  if(cntEl){ const cnt=photos.length; cntEl.textContent=cnt+" foto"+(cnt!==1?"s":""); }
 
-  // Update cat tab counts
+  // Actualizar conteo en tabs de categoría
   MEDIA_CATS.forEach(c=>{
     const btns=document.querySelectorAll(`#${pref}-cat-tabs .media-cat-tab`);
     btns.forEach(b=>{ if(b.textContent.replace(/\s*\(\d+\)/,"")===c){ const n=photos.filter(p=>p.cat===c).length; b.textContent=c+(n>0?` (${n})`:``); } });
@@ -4020,7 +4103,6 @@ function renderMediaGrid(showIdx, pref){
     return;
   }
 
-  // Store for lightbox
   _lbPhotos=filtered;
 
   grid.innerHTML=filtered.map((p,i)=>`
@@ -4039,7 +4121,7 @@ function filterMediaCat(cat, showIdx, pref){
   document.querySelectorAll(`#${pref}-cat-tabs .media-cat-tab`).forEach(b=>{
     b.classList.toggle("active", b.textContent.replace(/\s*\(\d+\)/,"")===cat || (cat==="todas" && b.textContent==="Todas"));
   });
-  renderMediaGrid(showIdx,pref);
+  renderMediaGrid(showIdx,pref); // async, se auto-resuelve
 }
 
 function handleFileUpload(e, showIdx, pref){
@@ -4057,59 +4139,47 @@ function handleDrop(e, showIdx, pref){
   processFiles(files, showIdx, pref);
 }
 
-function processFiles(files, showIdx, pref){
-  let done=0;
+async function processFiles(files, showIdx, pref){
   const errors=[];
-  files.forEach(file=>{
-    if(file.size>MAX_PHOTO_BYTES){errors.push(file.name+" (supera 20 MB)");done++;if(done===files.length&&errors.length)toast("⚠️ "+errors.join(", "));return;}
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      const photoId="ph"+Date.now()+"_"+Math.random().toString(36).slice(2,6);
-      const cat=MEDIA_CATS[0];
-      const meta={id:photoId,cat,label:file.name.replace(/\.[^.]+$/,""),ts:new Date().toISOString(),type:"file"};
-      const ok=savePhoto(showIdx,meta,ev.target.result);
-      if(ok){
-        const idx=loadPhotoIndex(showIdx);
-        idx.push(photoId);
-        savePhotoIndex(showIdx,idx);
-      } else {
-        errors.push(file.name+" (sin espacio)");
-      }
-      done++;
-      if(done===files.length){
-        renderMediaGrid(showIdx,pref);
-        if(errors.length)toast("⚠️ No se pudieron guardar: "+errors.join(", "));
-        else toast("✅ "+files.length+" foto"+(files.length!==1?"s":"")+" agregada"+(files.length!==1?"s":""));
-      }
-    };
-    reader.readAsDataURL(file);
+  const validFiles=files.filter(file=>{
+    if(file.size>MAX_PHOTO_BYTES){ errors.push(file.name+" (supera 49 MB)"); return false; }
+    return true;
   });
+  if(errors.length)toast("⚠️ Archivos omitidos: "+errors.join(", "));
+  if(!validFiles.length)return;
+  toast("⏳ Subiendo "+validFiles.length+" foto"+(validFiles.length!==1?"s":"")+"...");
+  const uploadErrors=[];
+  for(const file of validFiles){
+    const cat=MEDIA_CATS[0]; // "Escenario" por defecto, el usuario puede cambiarlo después
+    const result=await savePhotoFile(showIdx, file, cat, file.name.replace(/\.[^.]+$/,""));
+    if(!result)uploadErrors.push(file.name);
+  }
+  await renderMediaGrid(showIdx, pref);
+  if(uploadErrors.length) toast("⚠️ No se pudieron subir: "+uploadErrors.join(", "));
+  else toast("✅ "+validFiles.length+" foto"+(validFiles.length!==1?"s":"")+" subida"+(validFiles.length!==1?"s":""));
 }
 
-function addPhotoUrl(showIdx, pref){
+async function addPhotoUrl(showIdx, pref){
   const input=document.getElementById(pref+"-url-input");
   const catSel=document.getElementById(pref+"-url-cat");
   const url=input?.value.trim();
   const cat=catSel?.value||"Otros";
   if(!url||!url.startsWith("http")){toast("⚠️ Ingresá una URL válida (https://...)");return;}
-  const photoId="ph"+Date.now()+"_"+Math.random().toString(36).slice(2,6);
-  const meta={id:photoId,cat,label:url.split("/").pop().split("?")[0]||"Imagen URL",ts:new Date().toISOString(),type:"url"};
-  const ok=savePhoto(showIdx,meta,url);
-  if(ok){
-    const idx=loadPhotoIndex(showIdx);
-    idx.push(photoId);
-    savePhotoIndex(showIdx,idx);
+  const result=await savePhotoUrl(showIdx, url, cat);
+  if(result){
     if(input)input.value="";
-    renderMediaGrid(showIdx,pref);
+    await renderMediaGrid(showIdx,pref);
     toast("✅ Foto URL agregada");
-  } else { toast("⚠️ No se pudo guardar. Sin espacio disponible."); }
+  }
 }
 
-function confirmDeletePhoto(showIdx, photoId, pref){
+async function confirmDeletePhoto(showIdx, photoId, pref){
   if(!confirm("¿Eliminar esta foto?"))return;
-  deletePhoto(showIdx,photoId);
-  renderMediaGrid(showIdx,pref);
-  toast("🗑 Foto eliminada");
+  const ok=await deletePhoto(showIdx,photoId);
+  if(ok){
+    await renderMediaGrid(showIdx,pref);
+    toast("🗑 Foto eliminada");
+  }
 }
 
 // ── LIGHTBOX ──
@@ -4507,10 +4577,9 @@ function downloadShowComplete(idxParam){
     catch(e){return"";}
   }).join("\n");
 
-  // ── Fotos como data URLs para el export ──
+  // ── Fotos desde cache de memoria (ya cargadas desde Supabase) ──
   function multimediaExportHTML(s,idx){
-    const index=loadPhotoIndex(idx);
-    const photos=index.map(id=>loadPhoto(idx,id)).filter(Boolean);
+    const photos=_photoCache[idx]||[];
     if(!photos.length)return`<p style="color:#bbb;font-size:12px;padding:12px 0;">No hay fotos cargadas para este show.</p>`;
     return`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-top:10px;">
       ${photos.map(p=>`<div style="border-radius:8px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.12);">
