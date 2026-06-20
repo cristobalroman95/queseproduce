@@ -1378,6 +1378,20 @@ async function loadShows(){
       }
       cats[catIndex[row.categoria_key]].items.push({desc:row.descripcion||"",monto:Number(row.monto)||0});
     });
+    const {data:cierreRows,error:cierreError}=await sb.from("cierre_items").select("*").order("id",{ascending:true});
+    if(cierreError){ toast("⚠️ Error cargando cierres: "+cierreError.message); }
+    const cierreCategoriasByShowId={};
+    const cierreCatIndexByShowId={};
+    (cierreRows||[]).forEach(row=>{
+      if(!cierreCategoriasByShowId[row.show_id]){cierreCategoriasByShowId[row.show_id]=[];cierreCatIndexByShowId[row.show_id]={};}
+      const cats=cierreCategoriasByShowId[row.show_id];
+      const catIndex=cierreCatIndexByShowId[row.show_id];
+      if(catIndex[row.categoria_key]===undefined){
+        catIndex[row.categoria_key]=cats.length;
+        cats.push({key:row.categoria_key,nombre:row.categoria_nombre,esIngreso:!!row.es_ingreso,items:[]});
+      }
+      cats[catIndex[row.categoria_key]].items.push({desc:row.descripcion||"",presup:Number(row.presup)||0,real:Number(row.real)||0});
+    });
     let shows=(data||[]).map(row=>({
       id:row.id,            // PK real en Supabase, la necesitamos para guardar cambios en el próximo paso
       n:row.n,
@@ -1396,6 +1410,7 @@ async function loadShows(){
       fichaTecnica:fichaByShowId[row.id]||null,
       roadmap:roadmapByShowId[row.id]||null,
       presupuesto:presupCategoriasByShowId[row.id]?{categorias:presupCategoriasByShowId[row.id]}:null,
+      cierre:cierreCategoriasByShowId[row.id]?{categorias:cierreCategoriasByShowId[row.id]}:null,
     }));
     const today=new Date(); today.setHours(0,0,0,0);
     // Mismo patrón de siempre: lo que todavía no migramos (presupuesto, cierre) se autocompleta
@@ -2413,6 +2428,45 @@ function savePresupuesto(showIdx){
   presupuestoSaveChain=presupuestoSaveChain.then(()=>persistPresupuesto(show)).catch(()=>{});
   return presupuestoSaveChain;
 }
+// ── CIERRE: persistencia en Supabase ──
+// Mismo patrón que roadmap/presupuesto: borramos todas las filas del show y reinsertamos desde el estado en memoria.
+async function persistCierre(show){
+  if(!show||!show.id)return;
+  try{
+    const {error:delErr}=await sb.from("cierre_items").delete().eq("show_id",show.id);
+    if(delErr){ toast("⚠️ Error borrando cierre previo: "+delErr.message); return; }
+    const categorias=(show.cierre&&show.cierre.categorias)||[];
+    const payload=[];
+    categorias.forEach(cat=>{
+      (cat.items||[]).forEach((it,ii)=>{
+        payload.push({
+          show_id:show.id,
+          categoria_key:cat.key,
+          categoria_nombre:cat.nombre,
+          es_ingreso:!!cat.esIngreso,
+          descripcion:it.desc||"",
+          presup:it.presup||0,
+          real:it.real||0,
+          orden:ii+1,
+        });
+      });
+    });
+    if(payload.length){
+      const {error:insErr}=await sb.from("cierre_items").insert(payload);
+      if(insErr){ toast("⚠️ Error guardando cierre: "+insErr.message); }
+    }
+  }catch(e){
+    toast("⚠️ Error de conexión guardando cierre");
+  }
+}
+let cierreSaveChain=Promise.resolve();
+function saveCierre(showIdx){
+  const show=SHOWS[showIdx];
+  if(!show)return;
+  if(!show.id){ toast("⚠️ Guardá el show antes de editar el cierre"); return; }
+  cierreSaveChain=cierreSaveChain.then(()=>persistCierre(show)).catch(()=>{});
+  return cierreSaveChain;
+}
 function editSectionTitle(idx,si,value){
   SHOWS[idx].roadmap[si].s=value.trim();
   saveRoadmap(idx);
@@ -2523,6 +2577,9 @@ async function saveShows(){
       // Y el presupuesto inicial (defaultPresupuesto asignado en saveShow) de cada show nuevo
       const presupInserts=nuevos.filter(s=>s.id&&s.presupuesto&&s.presupuesto.categorias&&s.presupuesto.categorias.length).map(s=>persistPresupuesto(s));
       if(presupInserts.length)await Promise.all(presupInserts);
+      // Y el cierre inicial (defaultCierre asignado en saveShow) de cada show nuevo
+      const cierreInserts=nuevos.filter(s=>s.id&&s.cierre&&s.cierre.categorias&&s.cierre.categorias.length).map(s=>persistCierre(s));
+      if(cierreInserts.length)await Promise.all(cierreInserts);
     }
     if(existentes.length){
       const {error}=await sb.from("shows").upsert(existentes,{onConflict:"id"});
@@ -2966,19 +3023,20 @@ function updateCierreItem(showIdx,ci,ii,field,value){
   if(!it)return;
   if(field==="presup"||field==="real")it[field]=parseFloat(value)||0;
   else it[field]=value.trim();
-  saveShows();
+  saveCierre(showIdx);
+  rerenderCierre(showIdx);
 }
 function addCierreItem(showIdx,ci){
   if(!SHOWS[showIdx].cierre)SHOWS[showIdx].cierre=defaultCierre();
   SHOWS[showIdx].cierre.categorias[ci].items.push({desc:"Nuevo ítem",presup:0,real:0});
-  saveShows();
+  saveCierre(showIdx);
   rerenderCierre(showIdx);
   toast("➕ Ítem agregado");
 }
 function removeCierreItem(showIdx,ci,ii){
   if(!SHOWS[showIdx].cierre)return;
   SHOWS[showIdx].cierre.categorias[ci].items.splice(ii,1);
-  saveShows();
+  saveCierre(showIdx);
   rerenderCierre(showIdx);
 }
 function autofillCierreFromPresupuesto(showIdx){
@@ -3004,7 +3062,7 @@ function autofillCierreFromPresupuesto(showIdx){
     if(pref&&pref.presup===0)pref.presup=Math.round(ingrEst*0.60);
     if(gen&&gen.presup===0)gen.presup=Math.round(ingrEst*0.40);
   }
-  saveShows();
+  saveCierre(showIdx);
   rerenderCierre(showIdx);
   toast("✅ Cierre autocompletado desde presupuesto");
 }
