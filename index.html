@@ -307,7 +307,6 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 @media (max-width:640px){
   .gantt-controls{gap:10px;}
   .gantt-control-item input[type=range]{width:90px;}
-  .gantt-labels{width:120px !important;}
 }
 /* Scrollbars del Gantt (los que mueven la tabla) — más gruesos y fáciles de agarrar, estilo fader */
 .gantt-scroll,.gantt-labels{
@@ -4587,6 +4586,28 @@ function syncGanttVertical(source){
   if(other && other.scrollTop!==source.scrollTop)other.scrollTop=source.scrollTop;
 }
 
+function ganttLabelColWidth(visibleRows,rowHeight){
+  const canvas=ganttLabelColWidth._c||(ganttLabelColWidth._c=document.createElement('canvas'));
+  const ctx=canvas.getContext('2d');
+  let max=0;
+  visibleRows.forEach(row=>{
+    if(row.type==='group'){
+      ctx.font='700 11px Inter, sans-serif';
+      const txt='▾ '+(row.isUngrouped?'📦':'🎭')+' '+row.label;
+      const w=ctx.measureText(txt).width+20/*padding L+R*/+6/*gap*/+26/*badge contador*/;
+      if(w>max)max=w;
+    } else {
+      const size=rowHeight<34?'10px':'11px';
+      ctx.font='400 '+size+' Inter, sans-serif';
+      const w=ctx.measureText(row.item.nombre).width+32/*padding 22px izq + 10px der*/;
+      if(w>max)max=w;
+    }
+  });
+  const minW=window.innerWidth<640?110:150;
+  const maxW=Math.round(Math.min(window.innerWidth*0.42,360));
+  return Math.max(minW,Math.min(Math.ceil(max)+4,maxW));
+}
+
 function buildContenidoGantt(items){
   const container=document.getElementById('cd-gantt-container');
   if(!container)return;
@@ -4649,6 +4670,7 @@ function buildContenidoGantt(items){
     visibleRows.push({type:'group',key,label:g.label,count:g.rows.length,collapsed,isUngrouped:g.isUngrouped});
     if(!collapsed)g.rows.forEach(r=>visibleRows.push({type:'item',...r}));
   });
+  const labelColWidth=ganttLabelColWidth(visibleRows,rowHeight);
 
   const dayCells=[];
   const monthGroups=[];
@@ -4714,7 +4736,7 @@ function buildContenidoGantt(items){
   container.innerHTML=`
     ${withoutDates>0?`<div style="font-size:11px;color:#aaa;margin:10px 0;">⚠️ ${withoutDates} pieza${withoutDates!==1?'s':''} sin fecha asignada no se muestra${withoutDates!==1?'n':''} en el timeline.</div>`:''}
 <div class="gantt-wrap" style="display:flex;border:0.5px solid var(--border-soft);border-radius:8px;overflow:hidden;margin-top:10px;max-height:70vh;max-width:100%;">
-      <div class="gantt-labels" id="gantt-labels-col" onscroll="syncGanttVertical(this)" style="width:170px;flex-shrink:0;background:var(--surface2);border-right:1px solid var(--border-soft);overflow-y:auto;">
+      <div class="gantt-labels" id="gantt-labels-col" onscroll="syncGanttVertical(this)" style="width:${labelColWidth}px;flex-shrink:0;background:var(--surface2);border-right:1px solid var(--border-soft);overflow-y:auto;">
         <div style="height:42px;border-bottom:1px solid var(--border-soft);position:sticky;top:0;background:var(--surface2);z-index:3;"></div>
         ${labelRowsHTML.join('')}
       </div>
