@@ -1,0 +1,252 @@
+diff --git a/index.html b/index.html
+index b0be787..083e22c 100644
+--- a/index.html
++++ b/index.html
+@@ -560,7 +560,6 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
+     <div class="nav-item" onclick="nav('roadmap',this)"><span class="nav-icon">🗓</span>Hoja de ruta</div>
+     <div class="nav-item" onclick="nav('planner',this)"><span class="nav-icon">📅</span>Planner 2026</div>
+     <div class="nav-item" onclick="nav('equipo',this)"><span class="nav-icon">👥</span>Equipo</div>
+-    <div class="nav-item" id="nav-usuarios" style="display:none;border-top:1px solid rgba(255,255,255,0.1);margin-top:6px;padding-top:6px;" onclick="nav('usuarios',this)"><span class="nav-icon">🔐</span>Usuarios</div>
+   </nav>
+   <div class="sidebar-footer edit-zone">QueseProduce · v8 2026</div>
+ </aside>
+@@ -810,73 +809,7 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
+     </div>
+   </div>
+ 
+-  <!-- ── USUARIOS (solo programador) ── -->
+-  <div id="sec-usuarios" class="section">
+-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
+-      <div class="card">
+-        <h3>Sistema de acceso · PINs por rol</h3>
+-        <div style="font-size:11px;color:#B7B2DA;margin-top:6px;line-height:1.6;">
+-          Cada usuario tiene su propio PIN. Los roles definen qué secciones puede ver.<br>
+-          <strong style="color:#E4E1F7;">Esta sección es solo visible para el rol Programador.</strong>
+-        </div>
+-        <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
+-          <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--g50);border-radius:6px;font-size:11px;color:#E4E1F7;"><span style="font-size:14px;">⬛</span><div><strong>Programador</strong> — Ve todo + gestión de usuarios</div></div>
+-          <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--p50);border-radius:6px;font-size:11px;color:var(--p800);"><span style="font-size:14px;">🎭</span><div><strong>Artista / Productor</strong> — Acceso completo a la plataforma</div></div>
+-          <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--t50);border-radius:6px;font-size:11px;color:var(--t800);"><span style="font-size:14px;">📊</span><div><strong>Contador</strong> — Solo Finanzas + info básica de shows (sin valores de presupuesto por show)</div></div>
+-          <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--b50);border-radius:6px;font-size:11px;color:var(--b800);"><span style="font-size:14px;">🔧</span><div><strong>Técnico</strong> — Solo Hoja de ruta + ficha técnica del show</div></div>
+-          <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--a50);border-radius:6px;font-size:11px;color:var(--a800);"><span style="font-size:14px;">📣</span><div><strong>Marketing</strong> — Shows con fechas y estado, sin valores económicos</div></div>
+-        </div>
+-      </div>
+-      <div class="card">
+-        <h3>Sesiones activas / recientes</h3>
+-        <div id="usr-sessions-body" style="font-size:11px;color:#888;margin-top:8px;">—</div>
+-      </div>
+-    </div>
+-    <div class="card" style="padding:0;overflow:hidden;">
+-      <div style="padding:12px 14px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;">
+-        <h3>Usuarios registrados</h3>
+-        <button class="btn btn-primary" style="font-size:11px;" onclick="showAddUserForm()">+ Agregar usuario</button>
+-      </div>
+-      <div id="usr-add-area" style="display:none;padding:14px;border-bottom:1px solid var(--border-soft);background:rgba(108,92,231,0.12);">
+-        <div style="display:grid;grid-template-columns:1fr 130px 90px 130px 1fr auto;gap:10px;align-items:end;">
+-          <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Nombre</label><input id="usr-f-name" type="text" placeholder="Nombre completo" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);"></div>
+-          <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Rol</label>
+-            <select id="usr-f-rol" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);">
+-              <option value="productor">🎬 Productor</option>
+-              <option value="artista">🎤 Artista</option>
+-              <option value="contador">Contador</option>
+-              <option value="tecnico">Técnico</option>
+-              <option value="marketing">Marketing</option>
+-              <option value="programador">Programador</option>
+-            </select>
+-          </div>
+-          <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">PIN</label><input id="usr-f-pin" type="text" placeholder="ej: 4829" maxlength="12" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);letter-spacing:2px;"></div>
+-          <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Vencimiento</label><input id="usr-f-exp" type="date" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);"></div>
+-          <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Nota interna</label><input id="usr-f-nota" type="text" placeholder="ej: técnico audio show julio" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);"></div>
+-          <div style="display:flex;gap:6px;padding-bottom:1px;">
+-            <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="addUser()">Guardar</button>
+-            <button class="btn" style="font-size:11px;" onclick="hideAddUserForm()">✕</button>
+-          </div>
+-        </div>
+-      </div>
+-      <table class="usr-table">
+-        <thead><tr>
+-          <th style="padding-left:14px;">Nombre</th>
+-          <th>Rol</th>
+-          <th>PIN</th>
+-          <th>Vence</th>
+-          <th>Nota</th>
+-          <th style="padding-right:14px;"></th>
+-        </tr></thead>
+-        <tbody id="usr-table-body"></tbody>
+-      </table>
+-    </div>
+-    <div style="background:var(--a50);border:0.5px solid var(--a100);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--a800);margin-top:14px;">
+-      ⚠️ <strong>Recordatorio:</strong> los PINs se guardan en el navegador (localStorage). No son una capa de seguridad técnica fuerte — están pensados para organizar el acceso por rol en un contexto de confianza básica. Para seguridad real, migrar a sistema con backend.
+-    </div>
+-  </div>
+ 
+-  </div><!-- /content -->
+ </div><!-- /main -->
+ </div><!-- /app -->
+ 
+@@ -1664,16 +1597,13 @@ function resetShowsData(){
+ 
+ 
+ // ── AUTH SYSTEM ──
+-const AUTH_KEY="qp_users_v1";
+-const SESSION_KEY="qp_session_v1";
+-
+ const ROLE_DEFS={
+   // ⚠️ TEMPORAL: "invitado" es el rol que se asigna automáticamente a cualquiera que entre con Google
+   // por primera vez (ver trigger en Supabase). Hoy tiene visión completa, igual que "programador",
+   // a propósito — decisión tomada el 20-jun-2026 mientras se valida el alta por Google.
+   // Ajustar acá (o directamente el campo `rol` en la tabla `perfiles`) cuando se quiera restringir.
+-  invitado:{label:"Invitado",icon:"👋",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo","usuarios"],canEdit:true,showFinancials:true},
+-  programador:{label:"Programador",icon:"⬛",color:"#1a1a18",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo","usuarios"],canEdit:true,showFinancials:true},
++  invitado:{label:"Invitado",icon:"👋",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
++  programador:{label:"Programador",icon:"⬛",color:"#1a1a18",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+   productor:{label:"Productor",icon:"🎬",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+   artista:{label:"Artista",icon:"🎤",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+   contador:{label:"Contador",icon:"📊",color:"var(--t600)",sections:["dashboard","presupuesto","shows"],canEdit:false,showFinancials:true},
+@@ -1699,27 +1629,8 @@ function applyShowTabVisibility(){
+   });
+ }
+ 
+-// Default users (always present as fallback, stored in localStorage on first run)
+-const DEFAULT_USERS=[
+-  {id:"u0",nombre:"Admin",rol:"programador",pin:"0000",exp:"",nota:"Usuario maestro por defecto"},
+-  {id:"u1",nombre:"Productor",rol:"productor",pin:"1111",exp:"",nota:"Acceso completo producción"},
+-  {id:"u1b",nombre:"Artista",rol:"artista",pin:"5555",exp:"",nota:"Acceso artista"},
+-  {id:"u2",nombre:"Contador",rol:"contador",pin:"2222",exp:"",nota:"Solo finanzas"},
+-  {id:"u3",nombre:"Técnico",rol:"tecnico",pin:"3333",exp:"",nota:"Solo hoja de ruta"},
+-  {id:"u4",nombre:"Marketing",rol:"marketing",pin:"4444",exp:"",nota:"Shows sin valores"}
+-];
+-
+ let currentUser=null;
+ 
+-function loadUsers(){
+-  const raw=localStorage.getItem(AUTH_KEY);
+-  if(raw)return JSON.parse(raw);
+-  // First run: seed defaults
+-  localStorage.setItem(AUTH_KEY,JSON.stringify(DEFAULT_USERS));
+-  return DEFAULT_USERS;
+-}
+-function saveUsers(users){localStorage.setItem(AUTH_KEY,JSON.stringify(users));}
+-
+ async function loginWithGoogle(){
+   const err=document.getElementById("login-error");
+   const statusErr=document.getElementById("login-status-error");
+@@ -1800,11 +1711,7 @@ function applyRoleRestrictions(){
+     const match=onclick.match(/nav\('(\w+)'/);
+     if(match){
+       const sec=match[1];
+-      if(sec==="usuarios"){
+-        el.style.display=currentUser.rol==="programador"?"flex":"none";
+-      } else {
+-        el.style.display=allowed.includes(sec)?"flex":"none";
+-      }
++      el.style.display=allowed.includes(sec)?"flex":"none";
+     }
+   });
+   // Edit buttons: visible only for roles with canEdit (programador + productor)
+@@ -1858,7 +1765,7 @@ async function enterApp(){
+ }
+ 
+ // ── NAV ──
+-const TITLES={dashboard:"Dashboard ejecutivo",coordinacion:"Coordinación de departamentos",shows:"Shows 2026",contenido:"Contenido digital",presupuesto:"Finanzas · reportes y consolidado",roadmap:"Hoja de ruta · día del show",planner:"Planner 2026",equipo:"Equipo de producción",usuarios:"Gestión de usuarios · accesos y roles"};
++const TITLES={dashboard:"Dashboard ejecutivo",coordinacion:"Coordinación de departamentos",shows:"Shows 2026",contenido:"Contenido digital",presupuesto:"Finanzas · reportes y consolidado",roadmap:"Hoja de ruta · día del show",planner:"Planner 2026",equipo:"Equipo de producción"};
+ function nav(id,el){
+   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+   document.querySelectorAll(".nav-item").forEach(n=>n.classList.remove("active"));
+@@ -1872,7 +1779,6 @@ function nav(id,el){
+   if(id==="roadmap")buildRoadmapSelect();
+   if(id==="planner")buildPlanner();
+   if(id==="presupuesto")buildPresupConsolidado();
+-  if(id==="usuarios")buildUsersTable();
+   if(id==="contenido")buildContenido();
+ }
+ 
+@@ -3968,88 +3874,6 @@ function forceSyncInvitados(showIdx){
+   toast("✅ Invitados sincronizados al presupuesto y cierre");
+ }
+ 
+-// ── USER MANAGEMENT (Programador only) ──
+-const ROLE_LABELS={invitado:"Invitado",programador:"Programador",productor:"Productor",artista:"Artista",contador:"Contador",tecnico:"Técnico",marketing:"Marketing"};
+-const ROLE_ICONS={invitado:"👋",programador:"⬛",productor:"🎬",artista:"🎤",contador:"📊",tecnico:"🔧",marketing:"📣"};
+-
+-function buildUsersTable(){
+-  const users=loadUsers();
+-  const body=document.getElementById("usr-table-body");
+-  if(!body)return;
+-  const today=new Date();today.setHours(0,0,0,0);
+-  body.innerHTML=users.map((u,i)=>{
+-    let expLabel="—",expClass="";
+-    if(u.exp){
+-      const d=new Date(u.exp);
+-      const diff=Math.round((d-today)/(1000*60*60*24));
+-      if(diff<0){expLabel="Vencido";expClass="usr-exp-exp";}
+-      else if(diff<=7){expLabel="Vence en "+diff+"d";expClass="usr-exp-warn";}
+-      else{expLabel=u.exp;expClass="usr-exp-ok";}
+-    }
+-    const isMe=currentUser&&u.pin===currentUser.pin;
+-    return`<tr>
+-      <td style="padding-left:14px;font-weight:${isMe?"700":"400"};">${u.nombre}${isMe?" <span style='font-size:9px;color:var(--p400);'>(tú)</span>":""}</td>
+-      <td><span class="role-pill role-${u.rol}">${ROLE_ICONS[u.rol]||""} ${ROLE_LABELS[u.rol]||u.rol}</span></td>
+-      <td><code style="font-size:11px;background:rgba(255,255,255,0.08);color:#E4E1F7;padding:2px 7px;border-radius:4px;letter-spacing:2px;">${u.pin}</code></td>
+-      <td>${u.exp?`<span class="usr-exp ${expClass}">${expLabel}</span>`:"Sin vencimiento"}</td>
+-      <td style="color:#888;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.nota||"—"}</td>
+-      <td style="padding-right:14px;text-align:right;">
+-        <button class="btn" style="font-size:10px;padding:3px 8px;color:var(--r600);border-color:var(--r100);" onclick="removeUser(${i})" ${isMe?"disabled title='No podés eliminarte a vos mismo'":""}>Eliminar</button>
+-      </td>
+-    </tr>`;
+-  }).join("");
+-  buildSessionsWidget();
+-}
+-
+-function buildSessionsWidget(){
+-  const sessions=JSON.parse(localStorage.getItem("qp_sessions")||"[]");
+-  const el=document.getElementById("usr-sessions-body");
+-  if(!el)return;
+-  if(!sessions.length){el.innerHTML="<span style='color:#ccc;'>Sin sesiones registradas.</span>";return;}
+-  el.innerHTML=sessions.slice(0,8).map(s=>{
+-    const d=new Date(s.ts);
+-    const label=d.toLocaleDateString("es-CL",{day:"2-digit",month:"short"})+" · "+d.toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"});
+-    return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid #f0f0ee;">
+-      <span>${ROLE_ICONS[s.rol]||"👤"}</span>
+-      <div style="flex:1;"><strong>${s.nombre}</strong> <span style='color:#bbb;'>(${ROLE_LABELS[s.rol]||s.rol})</span></div>
+-      <span style="font-size:10px;color:#bbb;">${label}</span>
+-    </div>`;
+-  }).join("");
+-}
+-
+-function showAddUserForm(){document.getElementById("usr-add-area").style.display="block";}
+-function hideAddUserForm(){document.getElementById("usr-add-area").style.display="none";}
+-
+-function addUser(){
+-  const name=document.getElementById("usr-f-name").value.trim();
+-  const rol=document.getElementById("usr-f-rol").value;
+-  const pin=document.getElementById("usr-f-pin").value.trim();
+-  const exp=document.getElementById("usr-f-exp").value;
+-  const nota=document.getElementById("usr-f-nota").value.trim();
+-  if(!name||!pin){toast("⚠️ Ingresá nombre y PIN.");return;}
+-  const users=loadUsers();
+-  if(users.find(u=>u.pin===pin)){toast("⚠️ Ese PIN ya está en uso. Elegí uno diferente.");return;}
+-  const id="u"+Date.now();
+-  users.push({id,nombre:name,rol,pin,exp,nota});
+-  saveUsers(users);
+-  buildUsersTable();
+-  hideAddUserForm();
+-  ["usr-f-name","usr-f-pin","usr-f-exp","usr-f-nota"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+-  toast("✅ Usuario "+name+" agregado");
+-}
+-
+-function removeUser(idx){
+-  const users=loadUsers();
+-  const u=users[idx];
+-  if(!u)return;
+-  if(currentUser&&u.pin===currentUser.pin){toast("⚠️ No podés eliminarte a vos mismo.");return;}
+-  if(!confirm("¿Eliminar usuario "+u.nombre+"? No podrá acceder más."))return;
+-  users.splice(idx,1);
+-  saveUsers(users);
+-  buildUsersTable();
+-  toast("🗑 Usuario eliminado");
+-}
+-
+ // (La lógica de ocultar columnas financieras según rol vive directamente en buildShows())
+ 
+ 
