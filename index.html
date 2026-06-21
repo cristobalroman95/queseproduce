@@ -4684,12 +4684,12 @@ function buildContenidoGantt(items){
 
   container.innerHTML=`
     ${withoutDates>0?`<div style="font-size:11px;color:#aaa;margin:10px 0;">⚠️ ${withoutDates} pieza${withoutDates!==1?'s':''} sin fecha asignada no se muestra${withoutDates!==1?'n':''} en el timeline.</div>`:''}
-    <div class="gantt-wrap" style="display:flex;border:0.5px solid var(--border-soft);border-radius:8px;overflow:hidden;margin-top:10px;max-height:70vh;">
+<div class="gantt-wrap" style="display:flex;border:0.5px solid var(--border-soft);border-radius:8px;overflow:hidden;margin-top:10px;max-height:70vh;max-width:100%;">
       <div class="gantt-labels" id="gantt-labels-col" onscroll="syncGanttVertical(this)" style="width:170px;flex-shrink:0;background:var(--surface2);border-right:1px solid var(--border-soft);overflow-y:auto;">
         <div style="height:42px;border-bottom:1px solid var(--border-soft);position:sticky;top:0;background:var(--surface2);z-index:3;"></div>
         ${labelRowsHTML.join('')}
       </div>
-      <div class="gantt-scroll" id="gantt-scroll-col" onscroll="syncGanttVertical(this)" style="flex:1;overflow:auto;">
+<div class="gantt-scroll" id="gantt-scroll-col" onscroll="syncGanttVertical(this)" style="flex:1;min-width:0;overflow:auto;">
         <div style="position:relative;width:${totalWidth}px;">
           <div style="height:42px;border-bottom:1px solid var(--border-soft);position:sticky;top:0;z-index:2;background:var(--surface2);">
             ${monthHTML}
