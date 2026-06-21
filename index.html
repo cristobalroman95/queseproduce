@@ -243,6 +243,22 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 /* ── MODAL NUEVO SHOW ── */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:300;align-items:center;justify-content:center;}
 #cd-modal-overlay{z-index:400;}
+/* ── FICHA DE PIEZA (CD full detail) ── */
+#cd-full-detail-overlay{display:none;position:fixed;inset:0;background:var(--surface);z-index:350;overflow-y:auto;}
+#cd-full-detail-overlay.open{display:block;}
+.cd-fdt{display:flex;gap:6px;padding:0 32px;border-bottom:1px solid var(--border-soft);background:var(--surface);position:sticky;top:65px;z-index:9;}
+.cd-fdt-tab{background:none;border:none;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;color:#9690C2;padding:12px 6px 13px;border-bottom:2px solid transparent;margin-right:20px;}
+.cd-fdt-tab:hover{color:var(--p600);}
+.cd-fdt-tab.active{color:var(--p800);border-bottom-color:var(--p500);}
+.cd-fd-body{padding:28px 32px;max-width:900px;}
+.cd-info-field{margin-bottom:18px;}
+.cd-info-field .cd-fl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9690C2;margin-bottom:5px;}
+.cd-inline-select{background:var(--surface2);border:0.5px solid var(--border-soft);border-radius:7px;padding:7px 10px;font-size:13px;color:#F5F4FB;font-family:var(--font);cursor:pointer;width:100%;}
+.cd-inline-select:focus{outline:none;border-color:var(--p400);}
+.cd-inline-text{font-size:13px;color:#E4E1F7;border:0.5px solid var(--border-soft);border-radius:8px;padding:9px 12px;line-height:1.6;min-height:38px;}
+.cd-inline-textarea{font-size:13px;color:#E4E1F7;border:0.5px solid var(--border-soft);border-radius:8px;padding:9px 12px;line-height:1.6;min-height:70px;}
+.cd-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+@media(max-width:640px){.cd-info-grid{grid-template-columns:1fr;}.cd-fd-body{padding:18px 16px;}.cd-fdt{padding:0 16px;}}
 .modal-overlay.open{display:flex;}
 .modal{background:var(--surface);border-radius:12px;width:640px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);}
 .mh{padding:18px 22px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:10;border-radius:12px 12px 0 0;}
@@ -950,6 +966,23 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
       <button class="btn btn-primary" onclick="saveContenido()">Guardar</button>
     </div>
   </div>
+</div>
+
+<!-- ══════════════════ FICHA DE PIEZA (CD full detail) ══════════════════ -->
+<div id="cd-full-detail-overlay" onclick="closeCdDetailOvl(event)">
+  <div class="fd-header">
+    <div>
+      <button class="fd-back" onclick="closeCdDetail()">← Volver</button>
+    </div>
+    <div style="text-align:right;">
+      <div class="fd-title" id="cd-fd-title">—</div>
+      <div class="fd-sub" id="cd-fd-sub"></div>
+    </div>
+  </div>
+  <div class="cd-fdt">
+    <button class="cd-fdt-tab active" id="cd-fdt-info-btn" onclick="cdDetailTab('info')">ℹ️ Info</button>
+  </div>
+  <div class="cd-fd-body" id="cd-fd-body"></div>
 </div>
 
 <!-- ══════════════════ MODAL NUEVO/EDITAR SHOW ══════════════════ -->
@@ -2854,7 +2887,7 @@ function buildPlanner(){
       } else {
         const item=entry.data;
         const dia=item.fecha?item.fecha.split("-")[2]:"??";
-        return`<div class="cal-content" onclick="openEditContenido('${item.id}')" title="Ver ${item.nombre.replace(/"/g,'&quot;')}">
+        return`<div class="cal-content" onclick="openCdDetail('${item.id}')" title="Ver ${item.nombre.replace(/"/g,'&quot;')}">
           <div class="cc-meta"><span>🎬 Día ${dia}</span><span>${cdEstEmoji(item.estado)}</span></div>
           <div class="cc-name">${item.nombre}</div>
         </div>`;
@@ -4568,7 +4601,7 @@ function buildContenidoGantt(items){
     } else {
       const{item,ini,fin}=row;
       labelRowsHTML.push(`
-        <div onclick="openEditContenido('${item.id}')" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight<34?'10px':'11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${item.nombre}</div>`);
+        <div onclick="openCdDetail('${item.id}')" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight<34?'10px':'11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${item.nombre}</div>`);
       const offsetDays=Math.round((ini-minDate)/(1000*60*60*24));
       const durDays=Math.round((fin-ini)/(1000*60*60*24))+1;
       const left=offsetDays*dayWidth+2;
@@ -4578,7 +4611,7 @@ function buildContenidoGantt(items){
       const barHeight=rowHeight-Math.max(8,rowHeight*0.36);
       const isPub=item.estado==='Publicado';
       const showLabel=width>60;
-      barsHTML.push(`<div onclick="openEditContenido('${item.id}')" title="${item.nombre} · ${fmtDate(item.fecha||item.fechaInicio)}" style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barHeight}px;background:${color};opacity:${isPub?0.55:0.9};border-radius:6px;cursor:pointer;display:flex;align-items:center;padding:0 8px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${showLabel?(cdEstEmoji(item.estado)+' '+item.nombre):cdEstEmoji(item.estado)}</div>`);
+      barsHTML.push(`<div onclick="openCdDetail('${item.id}')" title="${item.nombre} · ${fmtDate(item.fecha||item.fechaInicio)}" style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barHeight}px;background:${color};opacity:${isPub?0.55:0.9};border-radius:6px;cursor:pointer;display:flex;align-items:center;padding:0 8px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${showLabel?(cdEstEmoji(item.estado)+' '+item.nombre):cdEstEmoji(item.estado)}</div>`);
       cursorY+=rowHeight;
     }
   });
@@ -4671,7 +4704,7 @@ function buildContenido(){
     if(!items.length){body.innerHTML=statsHTML+`<div class="card"><div class="cd-empty">No hay piezas que coincidan con el filtro.</div></div>`;return;}
     const rows=items.map(item=>{
       const show=item.showIdx!=null?SHOWS[item.showIdx]:null;
-      return`<tr onclick="openEditContenido('${item.id}')">
+      return`<tr onclick="openCdDetail('${item.id}')">
         <td style="padding-left:14px;font-weight:500;">${item.nombre}</td>
         <td><span class="cd-tipo-pill ${cdTipoClass(item.tipo)}">${item.tipo}</span></td>
         <td>${item.plataforma}</td>
@@ -4694,7 +4727,7 @@ function buildContenido(){
 function cdCardHTML(item){
   const show=item.showIdx!=null?SHOWS[item.showIdx]:null;
   const urlLink=item.url?`<a href="${item.url}" onclick="event.stopPropagation()" target="_blank" style="font-size:10px;color:var(--b600);">🔗 Ver</a>`:'';
-  return`<div class="cd-card" onclick="openEditContenido('${item.id}')">
+  return`<div class="cd-card" onclick="openCdDetail('${item.id}')">
     <div class="cd-card-top">
       <div class="cd-card-nombre">${item.nombre}</div>
       <button class="ph-close" style="font-size:11px;flex-shrink:0;" onclick="event.stopPropagation();deleteCd('${item.id}')" title="Eliminar">✕</button>
@@ -4801,6 +4834,153 @@ function deleteCd(id){
 
 function closeCdModal(){document.getElementById('cd-modal-overlay').classList.remove('open');cdEditingId=null;}
 function closeCdModalOvl(e){if(e.target===document.getElementById('cd-modal-overlay'))closeCdModal();}
+
+// ── FICHA DE PIEZA (CD full detail) ──
+let cdDetailId=null;
+let cdDetailActiveTab='info';
+
+function openCdDetail(id){
+  const item=CONTENIDO.find(c=>String(c.id)===String(id));
+  if(!item)return;
+  cdDetailId=id;
+  cdDetailActiveTab='info';
+  const el=document.getElementById('cd-full-detail-overlay');
+  el.classList.add('open');
+  document.body.style.overflow='hidden';
+  _refreshCdDetailHeader(item);
+  cdDetailTab('info');
+}
+
+function _refreshCdDetailHeader(item){
+  const show=item.showIdx!=null?SHOWS[item.showIdx]:null;
+  document.getElementById('cd-fd-title').textContent=item.nombre||'Sin nombre';
+  const parts=[];
+  if(item.tipo)parts.push(item.tipo);
+  if(item.plataforma)parts.push(item.plataforma);
+  if(show)parts.push('↗ '+show.nombre);
+  document.getElementById('cd-fd-sub').textContent=parts.join(' · ');
+}
+
+function closeCdDetail(){
+  document.getElementById('cd-full-detail-overlay').classList.remove('open');
+  document.body.style.overflow='';
+  cdDetailId=null;
+}
+function closeCdDetailOvl(e){/* overlay is full-screen content, no backdrop to close on click-outside */}
+
+function cdDetailTab(tab){
+  cdDetailActiveTab=tab;
+  ['info'].forEach(t=>{
+    const btn=document.getElementById('cd-fdt-'+t+'-btn');
+    if(btn)btn.classList.toggle('active',t===tab);
+  });
+  const body=document.getElementById('cd-fd-body');
+  const item=CONTENIDO.find(c=>String(c.id)===String(cdDetailId));
+  if(!item){body.innerHTML='<div class="card" style="color:#bbb;padding:30px;">Pieza no encontrada.</div>';return;}
+  if(tab==='info')body.innerHTML=cdInfoHTML(item);
+}
+
+function cdInfoHTML(item){
+  const id=item.id;
+  const show=item.showIdx!=null?SHOWS[item.showIdx]:null;
+  const showOpts='<option value="">— Sin show asociado —</option>'+SHOWS.map((s,i)=>`<option value="${i}"${item.showIdx===i?' selected':''}>${s.nombre}</option>`).join('');
+
+  const field=(label,inner)=>`<div class="cd-info-field"><div class="cd-fl">${label}</div>${inner}</div>`;
+
+  const textField=(label,fieldKey,value,placeholder='')=>field(label,
+    `<div class="cd-inline-text" contenteditable="true" data-field="${fieldKey}" onblur="updateCdField('${id}','${fieldKey}',this.textContent)" style="outline:none;">${escHtml(value||'')}</div>`
+  );
+  const textareaField=(label,fieldKey,value,placeholder='')=>field(label,
+    `<div class="cd-inline-textarea" contenteditable="true" data-field="${fieldKey}" onblur="updateCdField('${id}','${fieldKey}',this.textContent)" style="outline:none;">${escHtml(value||'')}</div>`
+  );
+  const selectField=(label,fieldKey,value,options)=>field(label,
+    `<select class="cd-inline-select" onchange="updateCdField('${id}','${fieldKey}',this.value)">${options.map(o=>`<option${value===o?' selected':''}>${o}</option>`).join('')}</select>`
+  );
+  const dateField=(label,fieldKey,value)=>field(label,
+    `<input type="date" class="cd-inline-select" style="cursor:pointer;" value="${value||''}" onchange="updateCdField('${id}','${fieldKey}',this.value)">`
+  );
+  const showField=field('Show vinculado',
+    `<select class="cd-inline-select" onchange="updateCdField('${id}','showIdx',this.value)">${showOpts}</select>`
+  );
+
+  return`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:10px;">
+      <div>
+        <span class="cd-tipo-pill ${cdTipoClass(item.tipo)}" style="font-size:12px;">${item.tipo}</span>
+        <span class="cd-est-pill ${cdEstClass(item.estado)}" style="font-size:12px;margin-left:8px;">${cdEstEmoji(item.estado)} ${item.estado}</span>
+      </div>
+      <button class="btn" style="font-size:11px;color:#E04B3A;border-color:#E04B3A;" onclick="deleteCdFromDetail('${id}')">🗑 Eliminar pieza</button>
+    </div>
+    <div class="cd-info-grid">
+      <div>
+        <div class="card">
+          <h3>Identificación</h3>
+          ${textField('Nombre / descripción','nombre',item.nombre,'Ej: Reel promo Show Especial')}
+          ${selectField('Tipo de contenido','tipo',item.tipo,CD_TIPOS)}
+          ${selectField('Plataforma(s)','plataforma',item.plataforma,CD_PLATAFORMAS)}
+          ${showField}
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>Estado y responsable</h3>
+          ${selectField('Estado','estado',item.estado,CD_ESTADOS)}
+          ${selectField('Responsable','responsable',item.responsable,['Editor','Community Manager','Marketing','Producción','Artista'])}
+          ${dateField('Fecha inicio (producción)','fechaInicio',item.fechaInicio)}
+          ${dateField('Fecha objetivo (publicación)','fecha',item.fecha)}
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <h3>Detalles adicionales</h3>
+      ${textField('URL publicado (si ya salió)','url',item.url,'https://...')}
+      ${textareaField('Notas / brief / referencias','notas',item.notas,'Contexto, referencias visuales, indicaciones...')}
+    </div>
+    <p style="font-size:10px;color:#bbb;margin-top:12px;">Todos los campos se guardan automáticamente al hacer clic afuera o cambiar el valor.</p>`;
+}
+
+function escHtml(str){
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function updateCdField(id,field,rawValue){
+  const item=CONTENIDO.find(c=>String(c.id)===String(id));
+  if(!item)return;
+  const value=typeof rawValue==='string'?rawValue.trim():rawValue;
+  if(field==='showIdx'){
+    item.showIdx=value!==''&&value!==null?parseInt(value):null;
+  } else if(field==='fechaInicio'){
+    item.fechaInicio=value||'';
+  } else if(field==='fecha'){
+    item.fecha=value||'';
+  } else {
+    item[field]=value;
+  }
+  // Refresh header in case name/tipo/plataforma changed
+  _refreshCdDetailHeader(item);
+  // Persist
+  saveContenidoData();
+  // Refresh main view if visible
+  buildContenido();
+  renderFullDetailIfOpen();
+}
+
+async function saveCdCampo(id){
+  // Direct update of a single contenido_digital row by id (avoids full delete+reinsert for field edits)
+  // Falls through to the chain-based persistContenido for now (safe, simpler)
+  // Future: replace with sb.from('contenido_digital').update({...}).eq('id', id) for efficiency
+  saveContenidoData();
+}
+
+function deleteCdFromDetail(id){
+  if(!confirm('¿Eliminar esta pieza de contenido?'))return;
+  CONTENIDO=CONTENIDO.filter(c=>String(c.id)!==String(id));
+  saveContenidoData();
+  buildContenido();
+  renderFullDetailIfOpen();
+  closeCdDetail();
+  toast('🗑 Pieza eliminada');
+}
 
 // ── FIN CONTENIDO DIGITAL ──
 
