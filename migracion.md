@@ -1,73 +1,76 @@
 # Plan de Migración y Roadmap de Features — QueseProduce (Supabase + Cloudflare)
-*Última actualización: 21 jun 2026 (Gantt agrupado + zoom + scroll horizontal/vertical + auto-ancho de labels, todo confirmado funcionando — próximo paso: Ficha de Pieza)*
+*Última actualización: 21 jun 2026 — auditoría RLS corrida contra la base real. Migración de datos: completa. Pendiente real: aplicar fix de RLS a 3 tablas sin auth (`personas`, `asignaciones`, `notas_equipo`) y terminar de pasar `persistContenido()` a upsert-por-id en alta/baja.*
 
-> Pegá este archivo completo al inicio de futuras conversaciones para dar contexto rápido del estado del proyecto. Mejor aún: decile a Claude que clone `https://github.com/cristobalroman95/queseproduce.git` para que lea el código directo del repo sin gastar contexto pegando `index.html` completo — y si no tiene acceso a red en ese entorno, pegá vos los bloques de código relevantes (login, `multimediaHTML`, sección Contenido Digital, etc.) según lo que se vaya a tocar.
+> Pegá este archivo completo al inicio de futuras conversaciones para dar contexto rápido del estado del proyecto. Mejor aún: decile a Claude que clone `https://github.com/cristobalroman95/queseproduce.git` y lea el código directo — este documento se desactualiza fácil si se sigue escribiendo a mano sin contrastarlo contra el repo. Hay además un segundo documento, `planificacion.md`, en la raíz del repo, específico de la iniciativa "Equipo en otras áreas + Planner modernizado". Pegalo también si vas a tocar esa parte.
+
+## ⚠️ Nota de corrección (21 jun 2026)
+Esta versión se reescribió después de clonar el repo y leer `index.html` directamente, no solo el `migracion.md` anterior. Encontrado:
+- El **Bloque C (Ficha de Pieza)** que figuraba como "próximo paso, no implementado" **ya está hecho**, con más alcance del que el plan original describía (5 pestañas, no 3).
+- `media_items` ya resolvió la decisión pendiente de esquema (opción **a**: columna `contenido_id`).
+- Existe una columna `fecha_idea` en `contenido_digital` (usada para un segmento de "preproducción" en el Gantt) que no estaba documentada.
+- El sistema viejo de "Usuarios"/PIN **ya se eliminó** (no es una decisión pendiente, está resuelta).
+- Hay un sistema de **Equipo** (`personas`, `asignaciones`) completo y en uso que no estaba mencionado en ninguna versión anterior de este archivo — vive documentado aparte en `planificacion.md`.
+- El fix de "guardar campo individual sin borrar toda la tabla" se hizo, pero **solo cubre edición**; alta y baja de piezas de contenido siguen usando borrar+reinsertar completo (impacto real: rompe `asignaciones` de Equipo en esos dos casos puntuales, no en la edición normal).
+
+**Moraleja para vos:** cuando una sesión hace cambios grandes de código, pedile a Claude que después corra `git clone` y confirme contra el `index.html` real antes de dar por buena cualquier actualización de este archivo. Si no tiene red, no hay drama, pero avisalo explícitamente para no asumir que el doc está sincronizado con el código.
+
+---
 
 ## Cómo arrancar una conversación nueva con este archivo
-1. Pegá este `migration.md` completo.
-2. Decile a Claude qué parte del código vas a tocar (ej: "vamos a trabajar en Contenido Digital, sección Gantt") y pegá solo esos bloques de `index.html` si Claude no tiene acceso al repo (sin red, o el repo no está montado en su entorno de trabajo).
-3. Si es la primera vez en la sesión, pedile que intente `git clone https://github.com/cristobalroman95/queseproduce.git` primero — si tiene red, ahorra tener que pegar código a mano.
+1. Pegá este `migracion.md` completo (y `planificacion.md` si vas a tocar Equipo/Planner).
+2. Decile a Claude qué parte del código vas a tocar.
+3. Si es la primera vez en la sesión, pedile que intente `git clone https://github.com/cristobalroman95/queseproduce.git` primero y que **confirme contra el código** antes de asumir nada de este doc.
 
 ## Arquitectura objetivo
-- **Frontend:** `index.html` (single-file) servido por Cloudflare Pages, deploy automático desde GitHub.
-- **Repo:** `cristobalroman95/queseproduce`, branch `main`.
+- **Frontend:** `index.html` (single-file, ~6200 líneas) servido por Cloudflare Pages, deploy automático desde GitHub.
+- **Repo:** `cristobalroman95/queseproduce`, branch `main`. Carpeta `patchs/` guarda los `.patch`/`.diff` de cada paso incremental (útil como historial real cuando `git log` no alcanza, porque el repo se sube con commits squasheados).
 - **Backend:** Supabase (Postgres + Auth + Storage). Conexión directa navegador → Supabase vía `supabase-js`. No hay Cloudflare Functions/Workers todavía.
-- **Seguridad:** depende 100% de RLS, porque la `anon key` queda pública en el código fuente del HTML. Modelo: "confianza básica" — cualquier usuario autenticado (`auth.role() = 'authenticated'`) puede hacer cualquier operación en casi todas las tablas (ver sección RLS más abajo). No hay todavía granularidad de permisos por rol a nivel de base de datos — el control de acceso por rol (`programador`/`productor`/`artista`/`contador`/`tecnico`/`marketing`) vive solo en el frontend (`ROLE_DEFS`), no en RLS.
+- **Auth:** Google OAuth como único mecanismo (`paso7-google-auth.patch`), con auto-alta de usuarios nuevos vía trigger de Supabase y rol `invitado` por defecto.
+- **Seguridad:** depende 100% de RLS, porque la `anon key` queda pública en el código fuente del HTML. Modelo: "confianza básica" — cualquier usuario autenticado (`auth.role() = 'authenticated'`) puede hacer cualquier operación en casi todas las tablas. No hay granularidad de permisos por rol a nivel de base de datos — el control de acceso por rol vive solo en el frontend (`ROLE_DEFS`), no en RLS.
 
 ## Archivos clave del repo
-- `index.html` — versión en producción (la que sirve Cloudflare Pages). Tiene el cliente Supabase, login, y todas las tablas migradas (ver tabla de estado abajo).
-- `QueseProduce_2026_rediseño_4_3.html` — versión vieja, pre-Supabase (login con PIN). **No se usa en el deploy.** Candidata a borrar o archivar.
-- Cliente Supabase: cerca de la línea ~1016 de `index.html` (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `const sb = supabase.createClient(...)`).
-- `loadShows()`, `saveShow()`, `saveShows()` — núcleo de carga/guardado de shows y sus relacionadas (ficha técnica, roadmap, presupuesto, cierre, invitados).
-- `multimediaHTML()`, `renderMediaGrid()`, `savePhotoFile()`, `loadPhotos()` — módulo de fotos de show (Supabase Storage).
-- `loadContenido()`, `persistContenido()`, `buildContenido()` — módulo de Contenido Digital.
+- `index.html` — versión en producción.
+- `migracion.md` — este archivo.
+- `planificacion.md` — plan específico de "Equipo en otras áreas + Planner modernizado" (iniciativa separada, en curso).
+- `patchs/` — historial de patches aplicados paso a paso. Nombres relevantes recientes: `paso7-google-auth.patch`, `paso8-equipo-personas.patch`, `paso8b-equipo-fotos-notas.patch`, `paso8c-automatch-email.patch`, `paso9-bitacora-panel-delete.patch` (agrega pestaña Bitácora al detalle de **show**, no confundir con la Bitácora de piezas de Contenido Digital, que es otra cosa), `paso-borrar-usuarios.patch`, `paso-ficha-pieza-info.patch`, `paso-ficha-pieza-v2-pestanas.patch`, `paso-fix-gantt-scroll-horizontal.patch`, `paso-gantt-labels-autowidth.patch`, `fix-updateCdField-update-puntual.patch`.
+- `QueseProduce_2026_OLD.html` — versión vieja, pre-Supabase. No se usa en el deploy.
+- Cliente Supabase: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `const sb = supabase.createClient(...)` cerca de la línea ~1016.
+- `loadShows()`, `saveShow()`, `saveShows()` — núcleo de carga/guardado de shows y relacionadas.
+- `multimediaHTML()`, `renderMediaGrid()`, `savePhotoFile()`, `loadPhotos()` — módulo de fotos de show (Supabase Storage, bucket `show-media`).
+- `loadContenido()`, `persistContenido()`, `buildContenido()`, `buildContenidoGantt()`, `cdDetailTab()` — módulo de Contenido Digital (lista/kanban/gantt + ficha completa).
+- `equipoStackHTML()`, `equipoAsignadoHTML()` — módulo de Equipo (avatares + asignación), usado hoy en Shows.
 
-## Estado por tabla (al 21 jun 2026)
+---
 
-| Tabla | ¿Conectada al front? | Notas |
+## ✅ ESTADO POR TABLA
+
+| Tabla | ¿Conectada? | Notas |
 |---|---|---|
-| `perfiles` | ✅ Sí | usada en login: rol, nombre, vencimiento. **Nota:** la sección "Usuarios" del front (`loadUsers()`/`saveUsers()`) todavía usa `localStorage` con PINs — es resabio de la versión vieja, NO está conectada a esta tabla. Pendiente de decidir si se migra o se elimina esa sección vieja. |
+| `perfiles` | ✅ Sí | rol, nombre, vencimiento. Auto-alta vía trigger en login con Google. |
 | `sesiones` | ✅ Sí (solo insert) | log de logins |
-| `shows` | ✅ Sí | `loadShows()` hace `select`, `saveShows()` hace `insert` (nuevos, sin id) + `upsert onConflict:"id"` (existentes). |
-| `ficha_tecnica` | ✅ Sí | 1:1 con shows. `upsert onConflict:"show_id"` en cada edición de campo. |
-| `roadmap_secciones` + `roadmap_tasks` | ✅ Sí | 1:N. Patrón borrar+reinsertar por show (`persistRoadmap`/`saveRoadmap`, encadenado con `roadmapSaveChain`). |
-| `presupuesto_items` | ✅ Sí | 1:N. Mismo patrón borrar+reinsertar (`persistPresupuesto`/`savePresupuesto`/`presupuestoSaveChain`). |
-| `cierre_items` | ✅ Sí | 1:N. Mismo patrón (`persistCierre`/`saveCierre`/`cierreSaveChain`). Incluye `es_ingreso` por categoría. |
-| `invitados` | ✅ Sí ← migrado recientemente | 1:N. Mismo patrón (`persistInvitados`/`saveInvitados`/`invitadosSaveChain`). Columnas reales: `id, show_id, nombre, rol, estado, pago` (**sin** columna `orden` — el orden se preserva por `order("id")` al leer). `updateGuest`/`addGuest`/`removeGuest`/`forceSyncInvitados` ya llaman a `saveInvitados`+`savePresupuesto`+`saveCierre` (por la sincronización automática invitados→RRHH). **Fix aplicado:** `updateGuest` no re-renderizaba la vista tras editar — se le agregó el bloque de re-render que ya tenían `addGuest`/`removeGuest`. |
-| `contenido_digital` | ✅ Sí | `loadContenido()`/`persistContenido()` — patrón borrar+reinsertar. Columnas: `id, nombre, tipo, plataforma, estado, responsable, fecha, show_id, url, notas`. **Pendiente de este plan:** agregar `fecha_inicio` (ver sección Gantt abajo). |
-| `media_items` (fotos de show) | ✅ Sí | Supabase Storage, bucket `show-media`. Tabla con `id, show_id, categoria, label, url, storage_path, tipo, created_at`. Categoría editable post-upload (`<select>` sobre la miniatura). **Confirmado por el usuario:** las 4 políticas RLS (SELECT/INSERT/UPDATE/DELETE) funcionan bien. |
+| `shows` | ✅ Sí | `insert` (nuevos) + `upsert onConflict:"id"` (existentes). |
+| `ficha_tecnica` | ✅ Sí | 1:1 con shows. `upsert onConflict:"show_id"`. |
+| `roadmap_secciones` + `roadmap_tasks` | ✅ Sí | 1:N, patrón borrar+reinsertar por show. |
+| `presupuesto_items` | ✅ Sí | 1:N, mismo patrón. |
+| `cierre_items` | ✅ Sí | 1:N, mismo patrón. Incluye `es_ingreso` por categoría. |
+| `invitados` | ✅ Sí | 1:N. Columnas: `id, show_id, nombre, rol, estado, pago`. Sincroniza automático con `presupuesto_items`/`cierre_items` (RRHH). |
+| `contenido_digital` | ✅ Sí | Columnas reales: `id, nombre, tipo, plataforma, estado, responsable, fecha, fecha_inicio, fecha_idea, show_id, url, notas`. **`fecha_idea`** = inicio de preproducción, no estaba documentada antes; junto con `fecha_inicio`/`fecha` arma el Gantt en dos tramos (preproducción + producción). Edición de campo individual: `UPDATE` puntual por `id` (`saveCdCampo`/`updateCdField`). Alta/baja de piezas: sigue siendo borrar+reinsertar de toda la tabla vía `persistContenido()` — ver advertencia en "Decisiones pendientes". |
+| `contenido_tasks` | ✅ Sí | Nueva. 1:N con `contenido_digital` vía `contenido_id`. Checklist de etapas (pestaña Progreso de la Ficha de Pieza). Columnas: `id, contenido_id, orden, etapa, estado, notas`. |
+| `contenido_logs` | ✅ Sí | Nueva. 1:N con `contenido_digital` vía `contenido_id`. Bitácora de comentarios de la pieza (pestaña Bitácora, **separada** de Progreso). Columnas: `id, contenido_id, autor, texto, created_at`. |
+| `contenido_metricas` | ✅ Sí | Nueva. 1:N con `contenido_digital` vía `contenido_id`. Reach/views/likes/comentarios/guardados/shares por plataforma (pestaña Métricas — el plan original la marcaba "futuro, no priorizado" pero ya está construida). |
+| `media_items` (fotos, shows y piezas de contenido) | ✅ Sí | Bucket único `show-media` (constante `STORAGE_BUCKET`) reusado para ambas entidades. Columna `contenido_id` (nullable) agregada en paralelo a `show_id` — la decisión de esquema (a) vs (b) quedó resuelta como **(a)**. |
+| `personas` | ✅ Sí | Nueva. Equipo de trabajo: nombre, rol, contacto, área, activo/inactivo. Auto-match por email contra `perfiles` (`autoMatchPerfilByContacto`). |
+| `asignaciones` | ✅ Sí | Nueva. 1:N, `entity_type` (`'show'` por ahora) + `entity_id` + `persona_id`. Patrón borrar+reinsertar por entidad. **Todavía no se usa con `entity_type='contenido'`** — bloqueado por el patrón borrar-todo de `persistContenido()` en alta/baja (ver `planificacion.md`). |
+| `notas_equipo` | ✅ Sí | Nueva, no documentada hasta esta revisión. Bitácora genérica de notas (autor, texto, fecha) por entidad — `entity_type` (`'show'` o `'persona'`) + `entity_id`. Usada en la pestaña "💬 Bitácora" del detalle de show (`fetchNotas`/`addNota`/`deleteNota`) y al borrar una persona del Equipo. Columnas: `id, entity_type, entity_id, autor, texto, created_at`. |
 
-**Punto clave:** ya no queda ninguna tabla de datos operativos en `localStorage`, excepto la sección "Usuarios" (PINs), que es un sistema paralelo viejo no conectado a `perfiles`/Supabase Auth.
+**Punto clave:** no queda ninguna tabla de datos operativos en `localStorage`. El sistema viejo de "Usuarios"/PIN se eliminó por completo (`paso-borrar-usuarios.patch`), no se migró.
 
-## Estado de RLS (auditado 21 jun 2026)
-
-Resultado de la auditoría completa vía `pg_policies`:
-
-- **Patrón dominante:** la mayoría de las tablas (`cierre_items`, `contenido_digital`, `ficha_tecnica`, `invitados`, `presets_roadmap`, `presets_secciones`, `presets_tasks`, `presupuesto_items`, `roadmap_secciones`, `roadmap_tasks`, `sesiones`, `shows`) tienen una sola política `auth_all` con `cmd=ALL` y condición `auth.role() = 'authenticated'` — cubre SELECT/INSERT/UPDATE/DELETE de una sola vez. **Sin huecos.**
-- **`media_items`:** 4 políticas separadas (Lectura pública = SELECT con `true`; Insert/Update/Delete autenticado). **Sin huecos**, confirmado funcionando en producción.
-- **`perfiles`:** `perfiles_select_auth` (SELECT, autenticado) + `perfiles_update_own` (UPDATE solo de su propia fila, `auth.uid() = id`) + `perfiles_programador_all` (ALL, solo si `es_programador()`). Sin política de INSERT para usuarios normales — coherente con que la creación de usuarios la haga un programador, pero la sección "Usuarios" del front sigue sin usar esta tabla (ver nota arriba).
-- **`fotos`:** tiene política `auth_all` pero es candidata a tabla huérfana — probablemente resabio de antes de migrar a `media_items`/Storage. Verificar si algún código la sigue usando; si no, archivar/eliminar.
-- **Queries útiles para auditar de nuevo en el futuro** (correr en SQL Editor de Supabase):
-  ```sql
-  -- Ver todas las políticas
-  select tablename, policyname, cmd, permissive, qual, with_check
-  from pg_policies where schemaname='public' order by tablename, cmd;
-
-  -- Conteo rápido por tabla+operación (buscar ceros)
-  select tablename, cmd, count(*) from pg_policies
-  where schemaname='public' group by tablename, cmd order by tablename, cmd;
-
-  -- Confirmar que RLS esté habilitado (no solo que existan políticas)
-  select relname as tabla, relrowsecurity as rls_activado
-  from pg_class where relnamespace='public'::regnamespace and relkind='r'
-  order by relname;
-  ```
 
 ## Patrón de código validado (aplicar a cualquier tabla nueva)
-- `load*()` async con `sb.from(tabla).select("*")`, agrupando por `show_id` (o la FK que corresponda) cuando hay relación 1:N.
+- `load*()` async con `sb.from(tabla).select("*")`, agrupando por la FK que corresponda cuando hay relación 1:N.
 - **1:1 simple** (ej. `ficha_tecnica`): `upsert(payload, {onConflict:"<columna_fk>"})` en cada edición de campo.
-- **1:N con alta/baja de ítems** (ej. `roadmap`, `presupuesto_items`, `cierre_items`, `invitados`, `contenido_digital`): borrar todas las filas del padre y reinsertar desde memoria. Encadenar con un `Promise` chain tipo `xSaveChain` para evitar carreras en ediciones rápidas seguidas.
-- **CRÍTICO — no olvidar el re-render tras cada función de edición de campo**, no solo en agregar/eliminar. Bug recurrente detectado y corregido dos veces (`presupuesto_items`→`updatePresupItem`, `cierre_items`→`updateCierreItem`, `invitados`→`updateGuest`). Antes de dar por cerrada una migración nueva, revisar que **todas** las funciones que modifican un campo (no solo add/remove) terminen con el bloque:
+- **1:N con alta/baja de ítems:** borrar todas las filas del padre y reinsertar desde memoria, encadenado con un `Promise` chain tipo `xSaveChain`. **Pero para edición de un campo individual de un ítem ya existente, preferir `UPDATE` puntual por `id`** (patrón confirmado con `contenido_digital`/`saveCdCampo`) — el borrar+reinsertar completo solo tiene sentido para alta/baja real de ítems, no para cada edición de campo, porque hace que los `id` cambien y rompe cualquier FK externa que apunte a esos ids (ej. `asignaciones.entity_id`, `media_items.contenido_id`).
+- **CRÍTICO — no olvidar el re-render tras cada función de edición de campo**, no solo en agregar/eliminar:
   ```javascript
   const s=SHOWS[showIdx];
   const isPanel=document.getElementById("panel-overlay").classList.contains("open");
@@ -75,88 +78,56 @@ Resultado de la auditoría completa vía `pg_policies`:
   else if(fullDetailIdx===showIdx){document.getElementById("fd-body").innerHTML=xHTML(s,showIdx,false);}
   ```
 - Antes de insertar sin `id` en una tabla nueva: `alter table <tabla> alter column id set generated by default;`
-- Al crear un show nuevo (`saveShow()`), crear también las filas iniciales en las tablas relacionadas ya migradas que lo requieran (1:1 siempre necesita fila base; 1:N con array vacío no necesita nada).
 - Errores: siempre mostrar vía `toast()`, nunca fallar en silencio.
-- **Lección de RLS (`media_items`/UPDATE, ahora también relevante para futuras tablas):** un `.update()` o `.delete()` sin política correspondiente en Supabase **no tira error** — devuelve éxito habiendo afectado 0 filas. Para detectar esto, agregar `.select()` al final de la query y revisar si `data` viene vacío cuando debería tener contenido.
-
-## Decisiones pendientes (heredadas, sin resolver)
-- ¿Se elimina del todo el sistema viejo de "Usuarios" con PIN (`localStorage`), o se migra a usar `perfiles`/Supabase Auth de verdad?
-- Tabla `fotos`: ¿se usa en algún lado? Si no, archivar.
-- Mapeo de permisos por rol a nivel de RLS (hoy todo es "cualquier autenticado puede todo" — funciona porque el control real está en el frontend, pero no es defensa en profundidad).
+- **Lección RLS:** un `.update()`/`.delete()` sin política correspondiente **no tira error** — devuelve éxito habiendo afectado 0 filas. Agregar `.select()` al final de la query para detectarlo.
+- **Lección de layout (Gantt):** si contenido ancho "empuja" el layout en vez de scrollear, revisar **toda la cadena de ancestros flex**, no solo el contenedor inmediato de scroll — un solo ancestro flex sin `min-width:0` (ej. `.main` dentro de `.app{display:flex}`) rompe la cadena entera.
 
 ---
 
-## ROADMAP DE FEATURES EN CURSO — Contenido Digital (sesión actual)
-
-Esta sección documenta el plan acordado con el usuario el 21 jun 2026, para retomarlo en otra conversación si se corta el contexto.
-
-### Contexto / objetivo general
-El usuario quiere que **Contenido Digital** tenga "presencia" real dentro de la plataforma, a la altura de lo que ya existe para Shows (ficha completa con pestañas, multimedia, progreso). Hoy cada pieza de contenido es solo una fila con 8 campos planos editable vía modal (`openNewContenido`/`openEditContenido`/`saveContenido`). El plan se acordó en 3 bloques (A, B, C); A y B ya están implementados.
-
-### Estado: Vista Gantt — IMPLEMENTADA Y CONFIRMADA (zoom + agrupado por show + scroll funcionando + scrollbars fader + auto-ancho de labels)
-Se agregó:
-- Columna `fecha_inicio` (date) en `contenido_digital`.
-- `loadContenido()` y `persistContenido()` actualizados para leer/escribir `fechaInicio`.
-- Campo "Fecha inicio (producción)" en el modal, antes del campo "Fecha objetivo (publicación)" ya existente.
-- Nueva opción "Vista timeline (Gantt)" en el `<select id="cd-view-sel">`.
-- `cdGanttColor(tipo)`, `buildContenidoGantt(items)` (reescrita para soportar agrupado + zoom), conectada en `buildContenido()` con un `else if(view==='gantt')` que cachea `items` en `_ganttItemsCache` y aplica defaults de zoom según ancho de pantalla la primera vez (`_ganttZoomTouched`).
-- Barras horizontales por pieza, coloreadas por tipo, línea de "hoy", fines de semana sombreados, header de meses/días.
-
-### A. Controles de zoom/slider — IMPLEMENTADO
-- **Slider horizontal** (`#cd-gantt-controls` → "🔍 Zoom tiempo"): controla `_ganttDayWidth` (rango 6–50px/día) vía `setGanttDayWidth(v)`. Recalcula posiciones llamando de nuevo a `buildContenidoGantt`, no usa `transform:scale()`.
-- **Slider vertical** ("↕ Alto filas"): controla `_ganttRowHeight` (rango 26–60px) vía `setGanttRowHeight(v)`, rotado visualmente con CSS (`.gantt-vslider-wrap input[type=range]{transform:rotate(-90deg)}`).
-- Defaults responsive: en `window.innerWidth<640` arranca con `dayWidth=16`/`rowHeight=34` (más compacto), salvo que el usuario ya haya tocado un slider en la sesión (`_ganttZoomTouched=true`, evita resetear su ajuste manual).
-- Botones "Expandir todo"/"Colapsar todo" (`expandAllGanttGroups`/`collapseAllGanttGroups`).
-- **Bug del scroll horizontal — CONFIRMADO RESUELTO (21 jun), causa raíz real encontrada un nivel más arriba de donde se buscó primero:**
-  - Primer intento (insuficiente): se agregó `min-width:0` a `#gantt-scroll-col` y `max-width:100%` a `.gantt-wrap`. Necesario pero no alcanzaba — el bug seguía: aparecía un scroll "fantasma" abajo de toda la página que no movía nada, y el contenido se seguía cortando al llegar a las primeras fechas.
-  - **Causa raíz real:** `.app{display:flex}` contiene el sidebar (`position:fixed`, por lo tanto fuera del flujo del flex) y `.main`. Al quedar `.main` como único item flex real, por default tiene `min-width:auto` — o sea, no se achica por debajo de lo que pida su contenido. El `<div style="width:${totalWidth}px">` del Gantt (miles de px con zoom alto) empujaba a `.main` a expandirse más allá del viewport, dejando inútil el `max-width:100%` del `.gantt-wrap` (el 100% se calculaba contra un `.main` ya expandido). Como `body{overflow-x:hidden}`, ese excedente quedaba atrapado y se manifestaba como ese scroll fantasma a nivel de documento.
-  - **Fix definitivo:** `.main{margin-left:220px;flex:1;min-width:0;}` (una sola propiedad agregada). Con esto `.main` queda acotado al ancho real disponible, el `max-width:100%` del Gantt sí tiene contra qué calcularse, y el `overflow:auto` interno de `#gantt-scroll-col` finalmente se activa de verdad.
-  - **Lección reforzada:** en un bug de "contenido ancho no scrollea, empuja el layout en vez de contenerse", no alcanza con poner `min-width:0` en el contenedor de scroll inmediato — hay que revisar **toda la cadena de ancestros flex** hasta ahí. Cualquier ancestro flex sin `min-width:0` rompe la cadena, sin importar cuántos `min-width:0`/`max-width:100%` tengan los descendientes.
-- **Scrollbars "fader" (21 jun):** la regla global del sitio (`::-webkit-scrollbar{width:4px;height:4px}`) hacía que el scroll del Gantt fuera casi invisible y muy difícil de agarrar con el mouse. Se agregó CSS scopeado a `.gantt-scroll`/`.gantt-labels` (no afecta el resto del sitio): grosor 20px, thumb violeta (paleta `--p200`/`--p400`/`--p600` para hover/active) con mínimo 64px de largo (así nunca queda una rayita imposible de pinchar aunque el timeline sea muy ancho), track con su propio fondo simulando la ranura de un fader. Fallback con `scrollbar-color`/`scrollbar-width:auto` para Firefox (no soporta grosor en px).
-- **Auto-ancho de la columna de labels (21 jun):** la columna de nombres tenía `width:170px` fijo (`120px !important` en mobile) y truncaba con "…" apenas el nombre no entraba. Nueva función `ganttLabelColWidth(visibleRows, rowHeight)`: mide con `canvas.measureText()` (fuente y peso reales) el texto más ancho entre todos los headers de grupo y nombres de pieza visibles, y devuelve ese ancho clampeado entre 150px–360px (110px mínimo en mobile, máximo 42% del ancho de pantalla). Se recalcula en cada `buildContenidoGantt()`, así que reacciona a expandir/colapsar grupos, cambios de alto de fila, etc. Si un nombre es absurdamente largo y excede el máximo, sigue cortando con ellipsis como fallback. Se sacó el `!important` de `.gantt-labels` en mobile porque ya competía con este ancho dinámico.
-
-### B. Agrupar el Gantt por show — IMPLEMENTADO
-- Headers de grupo colapsables (🎭 nombre del show + contador de piezas), generados dinámicamente agrupando por `item.showIdx` (o `'sin-show'` si no tiene show vinculado → grupo final "📦 Sin show vinculado").
-- Orden de grupos: por fecha del show (`SHOWS[idx].fecha`), con "Sin show vinculado" siempre al final.
-- Estado de colapso en `_ganttCollapsed{}` (objeto en memoria, se resetea al recargar la página — no persiste en Supabase ni localStorage, evaluar si vale la pena persistirlo a futuro).
-- `toggleGanttGroup(key)` colapsa/expande un grupo individual al hacer clic en su header.
-- Las dos columnas (labels a la izquierda, barras a la derecha) scrollean verticalmente sincronizadas vía `syncGanttVertical(source)`.
-- **Pendiente, no decidido:** si conviene aplicar el mismo agrupado por show a la vista "Lista" (se mencionó como posible extensión pero no se acordó explícitamente — evaluar cuando se retome si el usuario lo pide).
-
-### C. Pendiente — "Ficha de Pieza" completa (NO implementado aún, es el bloque más grande, próximo paso)
-Acordado con el usuario: aplicar a Contenido Digital el mismo patrón de "ficha con pestañas" que ya existe para Shows (`full-detail-overlay` + `fullDetailTab()`). Reemplaza el modal actual como mecanismo principal de edición.
-
-**Pestañas acordadas:**
-1. **Info** — los campos actuales (nombre, tipo, plataforma, estado, responsable, fecha inicio, fecha objetivo, show vinculado, URL, notas), pero **edición en vivo campo por campo** (`contenteditable`/`onblur`, mismo patrón que Ficha Técnica de shows), no modal con botón "Guardar".
-2. **Multimedia / Referencias** — subir imágenes de referencia, moodboard, capturas, archivo final. Reutilizar toda la infraestructura ya construida para fotos de show (`media_items`, Storage bucket `show-media`, lightbox, categorías editables). Dos caminos posibles a decidir en la próxima sesión:
-   - (a) Agregar columna `contenido_id` nullable a `media_items` y usarla en paralelo a `show_id` (una FK u otra, no ambas a la vez).
-   - (b) Crear tabla nueva `contenido_media_items` con esquema idéntico pero `contenido_id` en vez de `show_id`.
-   - Recomendación tentativa (a confirmar): opción (a) es más simple de mantener (un solo módulo de fotos sirve para ambas entidades), pero requiere ajustar `loadPhotos`/`savePhotoFile`/etc. para que acepten un parámetro de "tipo de entidad" en vez de asumir siempre `show_id`.
-3. **Progreso / Bitácora** — checklist de etapas específico de la pieza (ej: Guion → Grabación → Edición → Aprobación → Publicación), con estado por etapa. Reutilizar el patrón de `roadmap_tasks` pero sin el nivel de "secciones" (lista plana, más simple). Tabla nueva sugerida: `contenido_tasks` (`id, contenido_id, orden, etapa, estado, notas`).
-4. *(Futuro, no urgente)* **Métricas** — reach/views/likes post-publicación, mencionado como posible extensión a futuro, no priorizado todavía.
-
-**Cambios de flujo de entrada:**
-- El modal actual (`cd-modal-overlay`) se mantiene solo para alta rápida inicial (nombre + tipo mínimo).
-- Todos los `onclick="openEditContenido(...)"` existentes (cards de Kanban, filas de Lista, barras del Gantt) deben cambiar para abrir la nueva ficha completa en vez de reabrir el modal.
-- El botón "Editar pieza" deja de ser necesario como tal, reemplazado por la edición en vivo dentro de la ficha.
-
-**Trabajo técnico estimado para C (a ejecutar cuando se retome):**
-- Tabla(s) nueva(s) en Supabase: `contenido_tasks` (siempre) + decisión sobre `media_items`/`contenido_media_items` (ver arriba).
-- Nuevo overlay de página completa en el front, calco de `full-detail-overlay`/`fullDetailTab()` pero para piezas de contenido (podría llamarse `cd-full-detail-overlay` + `cdFullDetailTab()`, o reusar el mismo overlay con una bandera de "modo show" vs "modo pieza" — a decidir según cuánto se quiera reusar vs separar).
-- Funciones HTML por pestaña (`cdInfoHTML`, `cdMultimediaHTML` o reuso de `multimediaHTML` parametrizado, `cdProgresoHTML`).
-- Persistencia: `saveContenidoCampo()` (1:1-like, similar a como se guarda `ficha_tecnica` campo por campo) en vez de depender de `persistContenido()` (que es borrar+reinsertar de TODAS las piezas — no es ideal para guardar un campo individual de una pieza específica; convendría agregar un `update` puntual por `id` en vez de seguir usando el patrón de borrar-todo-y-reinsertar para ediciones de campo único, reservando el borrar+reinsertar solo para el alta/baja de piezas completas).
-
-### Orden de implementación acordado para la próxima sesión
-1. ~~Agrupar por show en el Gantt + sliders de zoom horizontal/vertical responsive (bloques A + B juntos)~~ ✅ **Hecho y confirmado (21 jun)** — incluye el fix de causa raíz del scroll horizontal, scrollbars "fader" y auto-ancho de la columna de labels.
-2. **← PRÓXIMO PASO** Ficha completa de pieza — pestaña Info con edición en vivo (reemplaza el modal como mecanismo principal).
-3. Pestaña Multimedia/Referencias (decidir primero esquema de tabla: (a) o (b) de arriba).
-4. Pestaña Progreso/Bitácora (tabla `contenido_tasks` nueva).
+## ⏳ DECISIONES Y TAREAS PENDIENTES (vigentes, confirmadas contra el código y la base real)
+1. **RLS granular por rol:** hoy todo es "cualquier autenticado puede todo" (más allá del fix del punto 1). Evaluar si vale la pena a futuro — no es urgente, es defensa en profundidad.
+2. **`persistContenido()` sigue siendo borrar+reinsertar completo en alta y baja de piezas** (solo la edición de campo ya usa `UPDATE` puntual). Es el bloqueo real para conectar Equipo a Contenido Digital: cualquier alta o baja de una pieza regenera los `id` de **todas** las piezas existentes, dejando huérfanas las filas de `asignaciones` que apuntaban a esos ids. Pasar también alta/baja a upsert-por-id es prerequisito antes de avanzar con Equipo en Contenido Digital (ver `planificacion.md`, Parte A.2).
+3. ~~Sistema viejo de "Usuarios"/PIN~~ → **Resuelto: se eliminó** (`paso-borrar-usuarios.patch`).
+4. ~~Esquema multimedia para piezas de Contenido~~ → **Resuelto: opción (a)**, columna `contenido_id` en `media_items`.
+5. ~~Auditoría RLS de tablas nuevas~~ → **Resuelto, corrida el 21 jun 2026** contra la base real (ver hallazgo del punto 1).
 
 ---
 
-## Snapshot de funciones clave a tener en cuenta si se retoma esto sin acceso al repo
-Si Claude no tiene acceso al repo en la sesión donde se retome esto, las funciones que casi seguro va a necesitar ver pegadas para poder seguir son:
-- Todo el bloque `// ── CONTENIDO DIGITAL ──` completo (incluye `loadContenido`, `persistContenido`, `buildContenido`, `buildContenidoGantt`, `cdCardHTML`, el modal HTML `cd-modal-overlay`, y las funciones `openNewContenido`/`openEditContenido`/`saveContenido`).
-- El bloque `// ── MULTIMEDIA ──` completo (para reusar como base de la pestaña de Multimedia de piezas).
-- `fullDetailTab()` y la estructura de `full-detail-overlay` en el HTML (para calcar el patrón de ficha completa).
-- `fullDetailRoadmapHTML()` (para usar como referencia al construir la pestaña de Progreso/Bitácora, que es conceptualmente un roadmap simplificado sin secciones).
+## ✅ COMPLETADO — Contenido Digital: Vista Gantt
+Columna `fecha_inicio` (producción) + `fecha_idea` (preproducción) en `contenido_digital`. Vista timeline con dos segmentos por pieza: tramo rayado de preproducción (`fecha_idea`→`fecha_inicio`, solo si ambas fechas existen) + tramo sólido de producción (`fecha_inicio`→`fecha`), coloreados por tipo (`cdGanttColor`), línea de "hoy", fines de semana sombreados.
+
+**Zoom:** sliders horizontal (`_ganttDayWidth`, 6–50px/día) y vertical (`_ganttRowHeight`, 26–60px), defaults responsive, expandir/colapsar todo, scroll horizontal arreglado (causa raíz: `.main` sin `min-width:0` en la cadena flex), scrollbars "fader" scopeadas, ancho automático de columna de labels vía `canvas.measureText()`.
+
+**Agrupado:** headers de grupo colapsables por show (🎭 nombre + contador), orden por fecha del show, "📦 Sin show vinculado" al final, scroll vertical sincronizado entre labels y barras.
+
+## ✅ COMPLETADO — Contenido Digital: Ficha de Pieza completa
+Reemplazó al modal como mecanismo principal de edición (overlay `cd-full-detail-overlay`, controlador `cdDetailTab()`). El modal (`cd-modal-overlay`, `openNewContenido()`) se mantiene solo para alta rápida inicial. La función vieja `openEditContenido()` quedó como código muerto — no se llama desde ningún lado del HTML; candidata a limpieza si se quiere prolijidad, no es urgente.
+
+**5 pestañas (no 3, como decía el plan original):**
+1. **Info** (`cdInfoHTML`) — edición en vivo campo por campo (`onblur`), `UPDATE` puntual vía `CD_FIELD_MAP`/`saveCdCampo`.
+2. **Refs / Multimedia** (`cdRefsHTML`) — sube a `media_items` con `contenido_id`, mismo bucket `show-media`. Categorías propias (distintas a las de fotos de show): Moodboard, Brief visual, Guion/Texto, Grabación, Edición, Entrega final, Otros.
+3. **Progreso** (`cdProgresoHTML`) — checklist de etapas, tabla `contenido_tasks`.
+4. **Bitácora** (`cdBitacoraHTML`) — comentarios con autor/texto/fecha, tabla `contenido_logs`. Es una pestaña aparte de Progreso, no fusionada.
+5. **Métricas** (`cdMetricasHTML`) — reach/views/likes/comentarios/guardados/shares por plataforma, tabla `contenido_metricas`. Estaba marcada como "futuro, no priorizado" en el plan original; ya está construida.
+
+---
+
+## 🔜 PRÓXIMO PASO REAL (según `planificacion.md`)
+El roadmap de Contenido Digital (A/B/C de este archivo) está cerrado. Lo que sigue activo es la iniciativa de **`planificacion.md`** ("Avatares de Equipo en otras áreas + Planner modernizado"), cuyo primer paso sugerido es:
+
+1. **A.1 — Avatares de Equipo en el Dashboard** (`buildDash()`): agregar columna "Equipo" a la tabla `dash-body`, reusando `equipoStackHTML("show", s.id, 3)` tal como ya existe en la tabla principal de Shows. Sin bloqueos, se puede hacer ahora mismo. **Confirmado pendiente** — `buildDash()` hoy no tiene esa columna.
+2. **Prerequisito antes de A.2 (Equipo en Contenido Digital):** terminar de pasar `persistContenido()` a upsert-por-id también en alta/baja (ver Decisión pendiente #4 arriba).
+3. Después: A.2 (avatares + bloque "Equipo asignado" en piezas de Contenido), y recién ahí la Parte B (Planner modernizado multi-vista).
+
+Ver `planificacion.md` para el detalle completo de las 5 vistas propuestas del Planner nuevo y las decisiones de diseño a confirmar antes de codear.
+
+---
+
+## Snapshot de funciones clave si se retoma sin acceso al repo
+Para seguir con **A.1 (Equipo en Dashboard)**, lo más probable es que haga falta pegar:
+- `function buildDash()` completa.
+- `equipoStackHTML(entityType, entityId, max)` y `equipoAsignadoHTML(entityType, entityId, canEdit)`.
+
+Para **A.2 / el fix de `persistContenido()`**:
+- `function persistContenido()` y `function saveCdCampo()`/`updateCdField()` (para ver el patrón de UPDATE puntual ya usado en edición y replicarlo para alta/baja).
+- `function loadAsignaciones()` y el bloque de guardado de `asignaciones` (líneas ~5935 en adelante a la fecha de esta revisión).
