@@ -1,0 +1,253 @@
+diff --git a/index.html b/index.html
+index 6f30feb..a17f234 100644
+--- a/index.html
++++ b/index.html
+@@ -196,14 +196,14 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
+ .ss-real{color:var(--g600);background:var(--g50);}
+ 
+ /* ── DETAIL PANEL ── */
+-.panel-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:200;align-items:flex-start;justify-content:flex-end;}
++.panel-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:center;justify-content:center;padding:24px;}
+ .panel-overlay.open{display:flex;}
+-.detail-panel{width:500px;height:100vh;background:var(--surface);overflow-y:auto;box-shadow:-4px 0 30px rgba(0,0,0,0.1);}
++.detail-panel{width:min(980px,92vw);max-height:90vh;background:var(--surface);overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.45);border-radius:16px;}
+ .ph{padding:18px 22px;border-bottom:1px solid var(--border-soft);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:10;}
+ .ph h2{font-size:15px;font-weight:700;margin-bottom:3px;}
+ .ph-sub{font-size:11px;color:#9690C2;}
+-.ph-close{background:none;border:none;cursor:pointer;font-size:18px;color:#9690C2;padding:2px 6px;border-radius:4px;}
+-.ph-close:hover{background:var(--g50);}
++.ph-close{background:none;border:none;cursor:pointer;font-size:22px;color:#B7B2DA;padding:2px 8px;border-radius:6px;line-height:1;}
++.ph-close:hover{background:var(--g50);color:#fff;}
+ .pb{padding:18px 22px;}
+ .ps{margin-bottom:20px;}
+ .ps h4{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#ccc;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #f0eeea;}
+@@ -935,6 +935,7 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
+ <button class="fd-tab active" id="fd-info-btn" onclick="fullDetailTab('info')">ℹ️ Información general</button>
+ <button class="fd-tab" id="fd-ficha-btn" onclick="fullDetailTab('ficha')">📝 Ficha técnica</button>
+ <button class="fd-tab" id="fd-equipo-btn" onclick="fullDetailTab('equipo')">👥 Equipo</button>
++<button class="fd-tab" id="fd-bitacora-btn" onclick="fullDetailTab('bitacora')">💬 Bitácora</button>
+ <button class="fd-tab" id="fd-rm-btn" onclick="fullDetailTab('roadmap')">🗺 Hoja de ruta</button>
+ <button class="fd-tab" id="fd-presupuesto-btn" onclick="fullDetailTab('presupuesto')">💰 Presupuesto</button>
+ <button class="fd-tab" id="fd-invitados-btn" onclick="fullDetailTab('invitados')">🎫 Invitados</button>
+@@ -1076,6 +1077,7 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
+       </div>
+     </div>
+     <div class="mf">
++      <button class="btn" id="delete-show-btn" style="display:none;margin-right:auto;color:var(--r600);border-color:var(--r100);" onclick="deleteShow()">🗑 Eliminar show</button>
+       <button class="btn" onclick="closeModal()">Cancelar</button>
+       <button class="btn btn-primary" onclick="saveShow()">Guardar show</button>
+     </div>
+@@ -1719,14 +1721,14 @@ const ROLE_DEFS={
+   productor:{label:"Productor",icon:"🎬",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+   artista:{label:"Artista",icon:"🎤",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+   contador:{label:"Contador",icon:"📊",color:"var(--t600)",sections:["dashboard","presupuesto","shows"],canEdit:false,showFinancials:true},
+-  tecnico:{label:"Técnico",icon:"🔧",color:"var(--b600)",sections:["shows"],canEdit:false,showFinancials:false,showTabs:["resumen","ficha","equipo","roadmap","multimedia"]},
++  tecnico:{label:"Técnico",icon:"🔧",color:"var(--b600)",sections:["shows"],canEdit:false,showFinancials:false,showTabs:["resumen","ficha","equipo","bitacora","roadmap","multimedia"]},
+   marketing:{label:"Marketing",icon:"📣",color:"var(--a600)",sections:["dashboard","shows","contenido","planner"],canEdit:false,showFinancials:false}
+ };
+ 
+ // Tabs disponibles dentro del detalle de un show ("Info","Ficha técnica","Hoja de ruta","Presupuesto","Invitados","Cierre").
+ // Si el rol no define showTabs, tiene acceso a todas. El Técnico queda limitado a ficha técnica + hoja de ruta — nunca a valores monetarios.
+ function getAllowedShowTabs(){
+-  const all=["info","ficha","equipo","roadmap","presupuesto","invitados","cdshow","cierre","multimedia"];
++  const all=["info","ficha","equipo","bitacora","roadmap","presupuesto","invitados","cdshow","cierre","multimedia"];
+   if(!currentUser)return all;
+   const role=ROLE_DEFS[currentUser.rol];
+   if(role&&role.showTabs)return role.showTabs;
+@@ -1734,7 +1736,7 @@ function getAllowedShowTabs(){
+ }
+ function applyShowTabVisibility(){
+   const allowed=getAllowedShowTabs();
+-  const map={resumen:"fd-resumen-btn",info:"fd-info-btn",ficha:"fd-ficha-btn",equipo:"fd-equipo-btn",roadmap:"fd-rm-btn",presupuesto:"fd-presupuesto-btn",invitados:"fd-invitados-btn",cdshow:"fd-cdshow-btn",cierre:"fd-cierre-btn",multimedia:"fd-multimedia-btn"};
++  const map={resumen:"fd-resumen-btn",info:"fd-info-btn",ficha:"fd-ficha-btn",equipo:"fd-equipo-btn",bitacora:"fd-bitacora-btn",roadmap:"fd-rm-btn",presupuesto:"fd-presupuesto-btn",invitados:"fd-invitados-btn",cdshow:"fd-cdshow-btn",cierre:"fd-cierre-btn",multimedia:"fd-multimedia-btn"};
+   Object.keys(map).forEach(k=>{
+     const btn=document.getElementById(map[k]);
+     if(btn)btn.style.display=allowed.includes(k)?"":"none";
+@@ -1982,6 +1984,7 @@ function openPanel(idx){
+   {key:"info",id:"pt-info-btn",arg:"info",label:"ℹ️ Info"},
+   {key:"ficha",id:"pt-ficha-btn",arg:"ficha",label:"📝 Ficha técnica"},
+   {key:"equipo",id:"pt-equipo-btn",arg:"equipo",label:"👥 Equipo"},
++  {key:"bitacora",id:"pt-bitacora-btn",arg:"bitacora",label:"💬 Bitácora"},
+   {key:"roadmap",id:"pt-rm-btn",arg:"rm",label:"🗺 Hoja de ruta"},
+   {key:"presupuesto",id:"pt-pres-btn",arg:"presupuesto",label:"💰 Presupuesto"},
+   {key:"invitados",id:"pt-inv-btn",arg:"invitados",label:"🎫 Invitados"},
+@@ -2011,7 +2014,7 @@ function panelTab(tab,idx){
+     tab=fb==="roadmap"?"rm":fb;
+   }
+   panelActiveTab=tab;
+-  ["resumen","info","ficha","equipo","rm","pres","inv","cierre","media"].forEach(t=>{
++  ["resumen","info","ficha","equipo","bitacora","rm","pres","inv","cierre","media"].forEach(t=>{
+     const btn=document.getElementById("pt-"+t+"-btn");
+     const canonical=t==="rm"?"roadmap":t==="pres"?"presupuesto":t==="inv"?"invitados":t==="media"?"multimedia":t;
+     if(btn)btn.classList.toggle("active",canonical===tab||t===tab);
+@@ -2022,6 +2025,7 @@ function panelTab(tab,idx){
+   else if(tab==="info")body.innerHTML=panelInfoHTML(s,idx);
+   else if(tab==="ficha")body.innerHTML=panelFichaHTML(s,idx);
+   else if(tab==="equipo"){const canEdit=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;body.innerHTML=equipoAsignadoHTML("show",s.id,canEdit);}
++  else if(tab==="bitacora")body.innerHTML=notasHTML("show",s.id);
+   else if(tab==="rm")body.innerHTML=panelRoadmapSummaryHTML(s,idx);
+   else if(tab==="presupuesto")body.innerHTML=presupuestoShowHTML(s,idx,true);
+   else if(tab==="invitados")body.innerHTML=invitadosHTML(s,idx,true);
+@@ -2279,7 +2283,7 @@ function fullDetailTab(tab){
+   const allowed=getAllowedShowTabs();
+   if(!allowed.includes(tab))tab=allowed[0]||"ficha";
+   fullDetailActiveTab=tab;
+-  ["resumen","info","ficha","equipo","roadmap","presupuesto","invitados","cdshow","cierre","multimedia"].forEach(t=>{
++  ["resumen","info","ficha","equipo","bitacora","roadmap","presupuesto","invitados","cdshow","cierre","multimedia"].forEach(t=>{
+     const key=t==="roadmap"?"rm":t;
+     const btn=document.getElementById("fd-"+key+"-btn");
+     if(btn)btn.classList.toggle("active",t===tab);
+@@ -2290,6 +2294,7 @@ function fullDetailTab(tab){
+   else if(tab==="info")body.innerHTML=fullDetailInfoHTML(s,fullDetailIdx);
+   else if(tab==="ficha")body.innerHTML=fullDetailFichaHTML(s,fullDetailIdx);
+   else if(tab==="equipo"){const canEdit=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;body.innerHTML=equipoAsignadoHTML("show",s.id,canEdit);}
++  else if(tab==="bitacora")body.innerHTML=notasHTML("show",s.id);
+   else if(tab==="roadmap")body.innerHTML=fullDetailRoadmapHTML(s,fullDetailIdx);
+   else if(tab==="presupuesto")body.innerHTML=presupuestoShowHTML(s,fullDetailIdx,false);
+   else if(tab==="invitados")body.innerHTML=invitadosHTML(s,fullDetailIdx,false);
+@@ -2641,7 +2646,7 @@ function removeSection(idx,si){
+ }
+ 
+ // ── MODAL NUEVO/EDITAR SHOW ──
+-function openNewShow(){editingIdx=null;document.getElementById("modal-title").textContent="Nuevo show";clearForm();document.getElementById("modal-overlay").classList.add("open");}
++function openNewShow(){editingIdx=null;document.getElementById("modal-title").textContent="Nuevo show";clearForm();const db=document.getElementById("delete-show-btn");if(db)db.style.display="none";document.getElementById("modal-overlay").classList.add("open");}
+ function openEditShow(idx){
+   editingIdx=idx;
+   const s=SHOWS[idx];
+@@ -2658,11 +2663,48 @@ function openEditShow(idx){
+   document.getElementById("f-ticket").value=s.ticket||"";
+   document.getElementById("f-vendidas").value=s.vendidas||"";
+   document.getElementById("f-notas").value=s.notas||"";
++  const db=document.getElementById("delete-show-btn");
++  if(db)db.style.display=(currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit)?"block":"none";
+   document.getElementById("modal-overlay").classList.add("open");
+ }
+ function clearForm(){["f-nombre","f-venue","f-ciudad","f-fecha","f-aforo","f-obj","f-ticket","f-vendidas","f-notas"].forEach(id=>document.getElementById(id).value="");document.getElementById("f-hora").value="20:00";}
+ function closeModal(){document.getElementById("modal-overlay").classList.remove("open");}
+ function closeModalOvl(e){if(e.target===document.getElementById("modal-overlay"))closeModal();}
++
++async function deleteShow(){
++  if(editingIdx==null)return;
++  const s=SHOWS[editingIdx];
++  if(!s)return;
++  if(!confirm("¿Eliminar el show \""+s.nombre+"\" definitivamente?\n\nSe borra también su ficha técnica, hoja de ruta, presupuesto, cierre, invitados, equipo asignado, bitácora y multimedia.\nLas piezas de Contenido Digital vinculadas NO se borran, solo quedan sin show asociado.\n\nEsta acción no se puede deshacer."))return;
++  const showId=s.id;
++  try{
++    await sb.from("ficha_tecnica").delete().eq("show_id",showId);
++    const {data:secs}=await sb.from("roadmap_secciones").select("id").eq("show_id",showId);
++    const secIds=(secs||[]).map(x=>x.id);
++    if(secIds.length)await sb.from("roadmap_tasks").delete().in("seccion_id",secIds);
++    await sb.from("roadmap_secciones").delete().eq("show_id",showId);
++    await sb.from("presupuesto_items").delete().eq("show_id",showId);
++    await sb.from("cierre_items").delete().eq("show_id",showId);
++    await sb.from("invitados").delete().eq("show_id",showId);
++    await sb.from("media_items").delete().eq("show_id",showId);
++    await sb.from("asignaciones").delete().eq("entity_type","show").eq("entity_id",showId);
++    await sb.from("notas_equipo").delete().eq("entity_type","show").eq("entity_id",showId);
++    await sb.from("contenido_digital").update({show_id:null}).eq("show_id",showId);
++    const {error}=await sb.from("shows").delete().eq("id",showId);
++    if(error){toast("⚠️ Error eliminando show: "+error.message);return;}
++  }catch(e){toast("⚠️ Error de conexión eliminando show");return;}
++  toast("🗑 Show eliminado");
++  closeModal();
++  closePanel();
++  if(fullDetailIdx!==null)closeFullDetail();
++  ASIGNACIONES=ASIGNACIONES.filter(a=>!(a.entityType==="show"&&String(a.entityId)===String(showId)));
++  delete NOTAS_CACHE[eqKey("show",showId)];
++  // Recargamos SHOWS y CONTENIDO juntos: el showIdx de cada pieza de contenido
++  // se recalcula por posición, así que conviene reconstruir ambos arrays de una.
++  SHOWS=await loadShows();
++  CONTENIDO=await loadContenido();
++  buildShows();buildDash();buildPlanner();buildRoadmapSelect();
++}
+ function saveShow(){
+   const nombre=document.getElementById("f-nombre").value.trim();
+   if(!nombre){toast("⚠️ Ingresá el nombre del show");return;}
+@@ -5812,7 +5854,7 @@ function buildEquipo(){
+           <div class="ta">${p.area}${p.contacto?" · "+p.contacto:""}</div>
+         </div>
+         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+-          <button class="btn" style="font-size:9px;padding:2px 7px;white-space:nowrap;" onclick="togglePersonaExtra(${p.id})">📅 ${upcoming.length} próx. · 🗒 notas</button>
++          <button class="btn" style="font-size:9px;padding:2px 7px;white-space:nowrap;" onclick="togglePersonaExtra(${p.id})">📅 ${upcoming.length} próx. · 💬 bitácora</button>
+           ${canEdit?`<div style="display:flex;gap:4px;">
+             <button class="btn" style="font-size:9px;padding:2px 7px;" onclick="editPersona(${p.id})">Editar</button>
+             <button class="btn" style="font-size:9px;padding:2px 7px;" onclick="togglePersonaActivo(${p.id})">${p.activo?"Desactivar":"Activar"}</button>
+@@ -5859,8 +5901,7 @@ function equipoAsignadoHTML(entityType,entityId,canEdit){
+     <div style="display:flex;flex-wrap:wrap;gap:6px;">${chips}</div>
+     ${rows?`<div style="margin-top:10px;">${rows}</div>`:""}
+     ${canEdit?`<div style="margin-top:12px;"><button class="btn btn-primary" style="font-size:11px;" onclick="saveEquipoAsignado('${entityType}',${entityId})">Guardar equipo</button></div>`:""}
+-  </div>
+-  ${notasHTML(entityType,entityId)}`;
++  </div>`;
+ }
+ 
+ function toggleEquipoPersona(entityType,entityId,personaId){
+@@ -5917,7 +5958,7 @@ async function saveEquipoAsignado(entityType,entityId){
+   buildEquipo(); // refresca mini-avatares/contadores si la sección Equipo está visible
+ }
+ 
+-// ── Notas: feed simple por persona o por show (sirve también como "bitácora de equipo") ──
++// ── Bitácora: feed simple por persona o por show, mismo estilo visual que la bitácora de Contenido Digital ──
+ let NOTAS_CACHE={};
+ function notasContainerId(entityType,entityId){return "notas-c-"+entityType+"-"+entityId;}
+ 
+@@ -5928,16 +5969,16 @@ function notasHTML(entityType,entityId){
+     NOTAS_CACHE[key]="loading";
+     fetchNotas(entityType,entityId);
+   }
+-  return `<div class="card" style="margin-top:10px;">
+-    <h3>🗒 Notas</h3>
+-    <div id="${cid}" style="margin-top:6px;">${renderNotasInner(entityType,entityId)}</div>
++  return `<div class="card" style="max-width:680px;">
++    <h3>💬 Bitácora</h3>
++    <div id="${cid}" style="margin-top:8px;">${renderNotasInner(entityType,entityId)}</div>
+   </div>`;
+ }
+ async function fetchNotas(entityType,entityId){
+   const key=eqKey(entityType,entityId);
+   try{
+     const {data,error}=await sb.from("notas_equipo").select("*").eq("entity_type",entityType).eq("entity_id",entityId).order("id",{ascending:true});
+-    if(error){toast("⚠️ Error cargando notas: "+error.message);NOTAS_CACHE[key]=[];}
++    if(error){toast("⚠️ Error cargando bitácora: "+error.message);NOTAS_CACHE[key]=[];}
+     else NOTAS_CACHE[key]=(data||[]).map(n=>({id:n.id,autor:n.autor||"",texto:n.texto||"",createdAt:n.created_at}));
+   }catch(e){NOTAS_CACHE[key]=[];}
+   const el=document.getElementById(notasContainerId(entityType,entityId));
+@@ -5947,22 +5988,24 @@ function renderNotasInner(entityType,entityId){
+   const key=eqKey(entityType,entityId);
+   const list=NOTAS_CACHE[key];
+   const canDelete=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;
+-  let listHTML;
+-  if(list==="loading"||list===undefined)listHTML="<div style='font-size:11px;color:#aaa;'>Cargando…</div>";
+-  else if(!list.length)listHTML="<div style='font-size:11px;color:#aaa;'>Sin notas todavía.</div>";
+-  else listHTML=list.map(n=>`
+-    <div style="padding:6px 0;border-bottom:0.5px solid var(--border-soft);font-size:11px;">
+-      <div style="display:flex;justify-content:space-between;gap:8px;">
+-        <strong>${(n.autor||"—").replace(/</g,"&lt;")}</strong>
+-        ${canDelete?`<button class="btn" style="font-size:9px;padding:1px 5px;" onclick="deleteNota('${entityType}',${entityId},${n.id})">✕</button>`:""}
++  let entries;
++  if(list==="loading"||list===undefined)entries="<div style='color:#666;font-size:13px;padding:16px 0;'>Cargando…</div>";
++  else if(!list.length)entries="<div style='color:#666;font-size:13px;padding:16px 0;'>No hay entradas en la bitácora todavía.</div>";
++  else entries=list.map(n=>`
++    <div class="cd-log-entry">
++      <div class="cd-log-meta">
++        <span style="font-weight:700;color:#B7B2DA;">${(n.autor||"—").replace(/</g,"&lt;")}</span>
++        <span>${n.createdAt?new Date(n.createdAt).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):""}</span>
++        ${canDelete?`<button onclick="deleteNota('${entityType}',${entityId},${n.id})" style="background:none;border:none;cursor:pointer;color:#666;font-size:11px;margin-left:auto;padding:0;">✕ eliminar</button>`:""}
+       </div>
+-      <div style="color:#888;margin-top:2px;white-space:pre-wrap;">${(n.texto||"").replace(/</g,"&lt;")}</div>
++      <div class="cd-log-texto">${(n.texto||"").replace(/</g,"&lt;")}</div>
+     </div>`).join("");
+-  return `${listHTML}
+-    <div style="margin-top:8px;display:flex;gap:6px;">
+-      <input type="text" id="nota-input-${entityType}-${entityId}" placeholder="Escribir una nota para el equipo..." style="flex:1;padding:6px 8px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);" onkeydown="if(event.key==='Enter')addNota('${entityType}',${entityId})">
+-      <button class="btn btn-primary" style="font-size:11px;" onclick="addNota('${entityType}',${entityId})">Agregar</button>
+-    </div>`;
++  return `<div class="cd-log-thread">${entries}</div>
++    <div class="cd-log-input-row">
++      <textarea id="nota-input-${entityType}-${entityId}" placeholder="Anotá una actualización, decisión, comentario..."></textarea>
++      <button class="btn btn-primary" style="font-size:12px;white-space:nowrap;align-self:flex-end;" onclick="addNota('${entityType}',${entityId})">Agregar ↵</button>
++    </div>
++    <p style="font-size:10px;color:#666;margin-top:8px;">Las entradas se registran con tu nombre (${(currentUser?.nombre||"—").replace(/</g,"&lt;")}) y la fecha/hora actual.</p>`;
+ }
+ async function addNota(entityType,entityId){
+   const input=document.getElementById("nota-input-"+entityType+"-"+entityId);
