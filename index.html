@@ -458,6 +458,15 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .team-card{background:var(--surface);border-radius:9px;padding:12px 14px;border:0.5px solid var(--border-soft);display:flex;align-items:center;gap:11px;}
 .team-av{width:36px;height:36px;border-radius:50%;background:var(--p100);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--p800);flex-shrink:0;}
 .ti .tn{font-weight:600;font-size:12px;}.ti .tr{font-size:10px;color:#9690C2;}.ti .ta{font-size:10px;color:#8077B0;}
+.team-card.inactivo{opacity:0.45;}
+
+/* ── EQUIPO ASIGNADO (shows/contenido) ── */
+.eq-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:16px;font-size:11px;font-weight:600;border:0.5px solid var(--border-soft);background:var(--surface);cursor:pointer;color:#888;transition:all 0.15s;}
+.eq-chip:hover{border-color:var(--p300);}
+.eq-chip.selected{background:var(--p100);border-color:var(--p400);color:var(--p800);}
+.eq-row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;padding:8px 10px;background:var(--surface);border-radius:7px;border:0.5px solid var(--border-soft);margin-top:6px;}
+.eq-row input[type="text"]{padding:6px 8px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);width:100%;}
+.eq-row label{display:flex;align-items:center;gap:5px;font-size:11px;color:#888;white-space:nowrap;}
 
 /* ── TOAST ── */
 .toast{position:fixed;bottom:24px;right:24px;background:var(--p900);color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;z-index:999;opacity:0;transform:translateY(8px);transition:all 0.3s;pointer-events:none;}
@@ -785,13 +794,32 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
 
   <!-- ── EQUIPO ── -->
   <div id="sec-equipo" class="section edit-zone">
-    <h3 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#aaa;margin-bottom:12px;">Equipo estable</h3>
-    <div class="team-grid" style="margin-bottom:22px;">
-      <div class="team-card"><div class="team-av">🎭</div><div class="ti"><div class="tn">Artista / Comediante</div><div class="tr">Director & Titular</div><div class="ta">Artístico</div></div></div>
-      <div class="team-card"><div class="team-av">—</div><div class="ti"><div class="tn">Por definir</div><div class="tr">Co-productor / Gestión</div><div class="ta">Producción</div></div></div>
-      <div class="team-card"><div class="team-av">—</div><div class="ti"><div class="tn">Por definir</div><div class="tr">Productor en campo</div><div class="ta">Producción · ~$1M–$2M</div></div></div>
-      <div class="team-card"><div class="team-av">—</div><div class="ti"><div class="tn">Por definir</div><div class="tr">Guionista</div><div class="ta">Creativo · ~$1M/mes</div></div></div>
-      <div class="team-card"><div class="team-av">—</div><div class="ti"><div class="tn">Por definir</div><div class="tr">Social Media</div><div class="ta">Marketing · ~$1M/mes</div></div></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#aaa;margin-bottom:0;">Equipo estable</h3>
+      <button class="btn btn-primary" id="persona-add-btn" style="display:none;font-size:11px;" onclick="showAddPersonaForm()">+ Agregar persona</button>
+    </div>
+    <div id="persona-add-area" style="display:none;padding:14px;border-radius:8px;border:0.5px solid var(--border-soft);background:rgba(108,92,231,0.06);margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 130px 1fr auto;gap:10px;align-items:end;">
+        <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Nombre</label><input id="per-f-nombre" type="text" placeholder="Nombre completo" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);"></div>
+        <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Cargo</label><input id="per-f-cargo" type="text" placeholder="ej: Productor en campo" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);"></div>
+        <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Área</label>
+          <select id="per-f-area" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);">
+            <option>Producción</option>
+            <option>Técnica</option>
+            <option>Creativo</option>
+            <option>Marketing</option>
+            <option>Artístico</option>
+          </select>
+        </div>
+        <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Contacto</label><input id="per-f-contacto" type="text" placeholder="email / teléfono" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);"></div>
+        <div style="display:flex;gap:6px;padding-bottom:1px;">
+          <button class="btn btn-primary" style="font-size:11px;white-space:nowrap;" onclick="savePersona()">Guardar</button>
+          <button class="btn" style="font-size:11px;" onclick="hideAddPersonaForm()">✕</button>
+        </div>
+      </div>
+    </div>
+    <div id="personas-grid" class="team-grid" style="margin-bottom:22px;">
+      <div style="font-size:11px;color:#aaa;">Cargando equipo…</div>
     </div>
     <h3 style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#aaa;margin-bottom:12px;">Servicios técnicos externos · tarifario orientativo por show</h3>
     <div class="card" style="padding:0;overflow:hidden;">
@@ -845,6 +873,7 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
 <button class="fd-tab" id="fd-resumen-btn" onclick="fullDetailTab('resumen')" style="display:none;">📋 Resumen</button>
 <button class="fd-tab active" id="fd-info-btn" onclick="fullDetailTab('info')">ℹ️ Información general</button>
 <button class="fd-tab" id="fd-ficha-btn" onclick="fullDetailTab('ficha')">📝 Ficha técnica</button>
+<button class="fd-tab" id="fd-equipo-btn" onclick="fullDetailTab('equipo')">👥 Equipo</button>
 <button class="fd-tab" id="fd-rm-btn" onclick="fullDetailTab('roadmap')">🗺 Hoja de ruta</button>
 <button class="fd-tab" id="fd-presupuesto-btn" onclick="fullDetailTab('presupuesto')">💰 Presupuesto</button>
 <button class="fd-tab" id="fd-invitados-btn" onclick="fullDetailTab('invitados')">🎫 Invitados</button>
@@ -1607,14 +1636,14 @@ const ROLE_DEFS={
   productor:{label:"Productor",icon:"🎬",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
   artista:{label:"Artista",icon:"🎤",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
   contador:{label:"Contador",icon:"📊",color:"var(--t600)",sections:["dashboard","presupuesto","shows"],canEdit:false,showFinancials:true},
-  tecnico:{label:"Técnico",icon:"🔧",color:"var(--b600)",sections:["shows"],canEdit:false,showFinancials:false,showTabs:["resumen","ficha","roadmap","multimedia"]},
+  tecnico:{label:"Técnico",icon:"🔧",color:"var(--b600)",sections:["shows"],canEdit:false,showFinancials:false,showTabs:["resumen","ficha","equipo","roadmap","multimedia"]},
   marketing:{label:"Marketing",icon:"📣",color:"var(--a600)",sections:["dashboard","shows","contenido","planner"],canEdit:false,showFinancials:false}
 };
 
 // Tabs disponibles dentro del detalle de un show ("Info","Ficha técnica","Hoja de ruta","Presupuesto","Invitados","Cierre").
 // Si el rol no define showTabs, tiene acceso a todas. El Técnico queda limitado a ficha técnica + hoja de ruta — nunca a valores monetarios.
 function getAllowedShowTabs(){
-  const all=["info","ficha","roadmap","presupuesto","invitados","cdshow","cierre","multimedia"];
+  const all=["info","ficha","equipo","roadmap","presupuesto","invitados","cdshow","cierre","multimedia"];
   if(!currentUser)return all;
   const role=ROLE_DEFS[currentUser.rol];
   if(role&&role.showTabs)return role.showTabs;
@@ -1622,7 +1651,7 @@ function getAllowedShowTabs(){
 }
 function applyShowTabVisibility(){
   const allowed=getAllowedShowTabs();
-  const map={resumen:"fd-resumen-btn",info:"fd-info-btn",ficha:"fd-ficha-btn",roadmap:"fd-rm-btn",presupuesto:"fd-presupuesto-btn",invitados:"fd-invitados-btn",cdshow:"fd-cdshow-btn",cierre:"fd-cierre-btn",multimedia:"fd-multimedia-btn"};
+  const map={resumen:"fd-resumen-btn",info:"fd-info-btn",ficha:"fd-ficha-btn",equipo:"fd-equipo-btn",roadmap:"fd-rm-btn",presupuesto:"fd-presupuesto-btn",invitados:"fd-invitados-btn",cdshow:"fd-cdshow-btn",cierre:"fd-cierre-btn",multimedia:"fd-multimedia-btn"};
   Object.keys(map).forEach(k=>{
     const btn=document.getElementById(map[k]);
     if(btn)btn.style.display=allowed.includes(k)?"":"none";
@@ -1755,6 +1784,8 @@ async function enterApp(){
   document.getElementById("app").style.display="flex";
    SHOWS = await loadShows();
   CONTENIDO = await loadContenido(); // carga después de SHOWS para tener el mapa showId→idx
+  PERSONAS = await loadPersonas();
+  ASIGNACIONES = await loadAsignaciones();
   // Build all data-driven sections now that DOM is visible and user is known
   buildShows();
   buildDash();
@@ -1780,6 +1811,7 @@ function nav(id,el){
   if(id==="planner")buildPlanner();
   if(id==="presupuesto")buildPresupConsolidado();
   if(id==="contenido")buildContenido();
+  if(id==="equipo")buildEquipo();
 }
 
 // ── SHOWS TABLE ──
@@ -2148,7 +2180,7 @@ function fullDetailTab(tab){
   const allowed=getAllowedShowTabs();
   if(!allowed.includes(tab))tab=allowed[0]||"ficha";
   fullDetailActiveTab=tab;
-  ["resumen","info","ficha","roadmap","presupuesto","invitados","cdshow","cierre","multimedia"].forEach(t=>{
+  ["resumen","info","ficha","equipo","roadmap","presupuesto","invitados","cdshow","cierre","multimedia"].forEach(t=>{
     const key=t==="roadmap"?"rm":t;
     const btn=document.getElementById("fd-"+key+"-btn");
     if(btn)btn.classList.toggle("active",t===tab);
@@ -2158,6 +2190,7 @@ function fullDetailTab(tab){
   if(tab==="resumen")body.innerHTML=fullDetailResumenHTML(s,fullDetailIdx);
   else if(tab==="info")body.innerHTML=fullDetailInfoHTML(s,fullDetailIdx);
   else if(tab==="ficha")body.innerHTML=fullDetailFichaHTML(s,fullDetailIdx);
+  else if(tab==="equipo"){const canEdit=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;body.innerHTML=equipoAsignadoHTML("show",s.id,canEdit);}
   else if(tab==="roadmap")body.innerHTML=fullDetailRoadmapHTML(s,fullDetailIdx);
   else if(tab==="presupuesto")body.innerHTML=presupuestoShowHTML(s,fullDetailIdx,false);
   else if(tab==="invitados")body.innerHTML=invitadosHTML(s,fullDetailIdx,false);
@@ -4770,6 +4803,229 @@ function closeCdModal(){document.getElementById('cd-modal-overlay').classList.re
 function closeCdModalOvl(e){if(e.target===document.getElementById('cd-modal-overlay'))closeCdModal();}
 
 // ── FIN CONTENIDO DIGITAL ──
+
+// ══════════════════════════════════════════════
+// EQUIPO: personas (registro real) + asignaciones (equipo de trabajo por show/contenido)
+// ══════════════════════════════════════════════
+
+const PERSONA_AREAS=['Producción','Técnica','Creativo','Marketing','Artístico'];
+let PERSONAS=[];
+let ASIGNACIONES=[];
+let editingPersonaId=null;
+
+async function loadPersonas(){
+  try{
+    const {data,error}=await sb.from("personas").select("*").order("id",{ascending:true});
+    if(error){ toast("⚠️ Error cargando equipo: "+error.message); return []; }
+    return (data||[]).map(p=>({
+      id:p.id, nombre:p.nombre||"", cargo:p.cargo||"", area:p.area||"Producción",
+      contacto:p.contacto||"", activo:p.activo!==false, nota:p.nota||"",
+    }));
+  }catch(e){ toast("⚠️ Error de conexión cargando equipo"); return []; }
+}
+
+async function loadAsignaciones(){
+  try{
+    const {data,error}=await sb.from("asignaciones").select("*");
+    if(error){ toast("⚠️ Error cargando asignaciones de equipo: "+error.message); return []; }
+    return (data||[]).map(a=>({
+      id:a.id, entityType:a.entity_type, entityId:a.entity_id, personaId:a.persona_id,
+      rol:a.rol_contexto||"", tarea:a.tarea||"", viaja:!!a.viaja, estado:a.estado||"confirmado",
+    }));
+  }catch(e){ toast("⚠️ Error de conexión cargando asignaciones de equipo"); return []; }
+}
+
+// ── CRUD de personas (sección Equipo) ──
+function showAddPersonaForm(){
+  editingPersonaId=null;
+  document.getElementById("persona-add-area").style.display="block";
+  ["per-f-nombre","per-f-cargo","per-f-contacto"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  document.getElementById("per-f-area").value="Producción";
+}
+function hideAddPersonaForm(){
+  document.getElementById("persona-add-area").style.display="none";
+  editingPersonaId=null;
+}
+function editPersona(id){
+  const p=PERSONAS.find(x=>x.id===id);
+  if(!p)return;
+  editingPersonaId=id;
+  document.getElementById("persona-add-area").style.display="block";
+  document.getElementById("per-f-nombre").value=p.nombre;
+  document.getElementById("per-f-cargo").value=p.cargo;
+  document.getElementById("per-f-area").value=p.area;
+  document.getElementById("per-f-contacto").value=p.contacto;
+}
+async function savePersona(){
+  const nombre=document.getElementById("per-f-nombre").value.trim();
+  if(!nombre){toast("⚠️ Ingresá un nombre.");return;}
+  const payload={
+    nombre,
+    cargo:document.getElementById("per-f-cargo").value.trim(),
+    area:document.getElementById("per-f-area").value,
+    contacto:document.getElementById("per-f-contacto").value.trim(),
+  };
+  try{
+    if(editingPersonaId!=null){
+      const {error}=await sb.from("personas").update(payload).eq("id",editingPersonaId);
+      if(error){toast("⚠️ Error guardando: "+error.message);return;}
+      const idx=PERSONAS.findIndex(p=>p.id===editingPersonaId);
+      if(idx>=0)PERSONAS[idx]={...PERSONAS[idx],...payload};
+      toast("✅ Persona actualizada");
+    } else {
+      const {data,error}=await sb.from("personas").insert({...payload,activo:true}).select().single();
+      if(error){toast("⚠️ Error guardando: "+error.message);return;}
+      PERSONAS.push({id:data.id,nombre:data.nombre,cargo:data.cargo||"",area:data.area,contacto:data.contacto||"",activo:true,nota:""});
+      toast("✅ Persona agregada");
+    }
+  }catch(e){toast("⚠️ Error de conexión guardando persona");return;}
+  hideAddPersonaForm();
+  buildEquipo();
+}
+async function togglePersonaActivo(id){
+  const p=PERSONAS.find(x=>x.id===id);
+  if(!p)return;
+  const nuevoActivo=!p.activo;
+  try{
+    const {error}=await sb.from("personas").update({activo:nuevoActivo}).eq("id",id);
+    if(error){toast("⚠️ Error actualizando: "+error.message);return;}
+    p.activo=nuevoActivo;
+    toast(nuevoActivo?"✅ Marcada como activa":"💤 Marcada como inactiva");
+  }catch(e){toast("⚠️ Error de conexión");return;}
+  buildEquipo();
+}
+async function deletePersona(id){
+  const p=PERSONAS.find(x=>x.id===id);
+  if(!p)return;
+  if(!confirm("¿Eliminar a "+p.nombre+" del equipo? También se quitará de cualquier show/contenido donde esté asignada."))return;
+  try{
+    const {error}=await sb.from("personas").delete().eq("id",id);
+    if(error){toast("⚠️ Error eliminando: "+error.message);return;}
+    PERSONAS=PERSONAS.filter(x=>x.id!==id);
+    ASIGNACIONES=ASIGNACIONES.filter(a=>a.personaId!==id); // cascade ya las borró en DB
+    toast("🗑 Persona eliminada");
+  }catch(e){toast("⚠️ Error de conexión eliminando persona");return;}
+  buildEquipo();
+  renderFullDetailIfOpen();
+}
+
+function buildEquipo(){
+  const canEdit=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;
+  const addBtn=document.getElementById("persona-add-btn");
+  if(addBtn)addBtn.style.display=canEdit?"flex":"none";
+  const grid=document.getElementById("personas-grid");
+  if(!grid)return;
+  if(!PERSONAS.length){
+    grid.innerHTML="<div style='font-size:11px;color:#aaa;'>Todavía no hay personas registradas. "+(canEdit?"Usá '+ Agregar persona'.":"")+"</div>";
+    return;
+  }
+  const activos=PERSONAS.filter(p=>p.activo);
+  const inactivos=PERSONAS.filter(p=>!p.activo);
+  grid.innerHTML=[...activos,...inactivos].map(p=>`
+    <div class="team-card ${p.activo?"":"inactivo"}">
+      <div class="team-av">${(p.nombre||"?").charAt(0).toUpperCase()}</div>
+      <div class="ti" style="flex:1;">
+        <div class="tn">${p.nombre}${p.activo?"":" <span style='font-size:9px;color:#bbb;'>(inactiva)</span>"}</div>
+        <div class="tr">${p.cargo||"—"}</div>
+        <div class="ta">${p.area}${p.contacto?" · "+p.contacto:""}</div>
+      </div>
+      ${canEdit?`<div style="display:flex;flex-direction:column;gap:4px;">
+        <button class="btn" style="font-size:9px;padding:2px 7px;" onclick="editPersona(${p.id})">Editar</button>
+        <button class="btn" style="font-size:9px;padding:2px 7px;" onclick="togglePersonaActivo(${p.id})">${p.activo?"Desactivar":"Activar"}</button>
+        <button class="btn" style="font-size:9px;padding:2px 7px;color:var(--r600);border-color:var(--r100);" onclick="deletePersona(${p.id})">Eliminar</button>
+      </div>`:""}
+    </div>`).join("");
+}
+
+// ── Asignaciones genéricas (equipo de trabajo por show o contenido) ──
+function getAsignaciones(entityType,entityId){
+  return ASIGNACIONES.filter(a=>a.entityType===entityType&&String(a.entityId)===String(entityId));
+}
+
+// Estado temporal de edición mientras se arma la selección, antes de guardar
+let eqEditState={};
+function eqKey(entityType,entityId){return entityType+":"+entityId;}
+
+function equipoAsignadoHTML(entityType,entityId,canEdit){
+  const key=eqKey(entityType,entityId);
+  if(!eqEditState[key]){
+    // Inicializar desde lo ya guardado
+    eqEditState[key]=getAsignaciones(entityType,entityId).map(a=>({personaId:a.personaId,rol:a.rol,tarea:a.tarea,viaja:a.viaja}));
+  }
+  const sel=eqEditState[key];
+  const activos=PERSONAS.filter(p=>p.activo);
+  if(!activos.length){
+    return `<div class="card"><h3>Equipo asignado</h3><p style="font-size:11px;color:#aaa;margin-top:8px;">No hay personas activas registradas en Equipo todavía.</p></div>`;
+  }
+  const chips=activos.map(p=>{
+    const isSel=sel.some(s=>s.personaId===p.id);
+    return `<div class="eq-chip ${isSel?"selected":""}" ${canEdit?`onclick="toggleEquipoPersona('${entityType}',${entityId},${p.id})"`:""}>${p.nombre}</div>`;
+  }).join("");
+  const rows=sel.map(s=>{
+    const p=PERSONAS.find(x=>x.id===s.personaId);
+    if(!p)return"";
+    return `<div class="eq-row">
+      <input type="text" ${canEdit?"":"disabled"} placeholder="Rol en este contexto (ej: Sonidista)" value="${s.rol||""}" onchange="updateEquipoField('${entityType}',${entityId},${p.id},'rol',this.value)">
+      <input type="text" ${canEdit?"":"disabled"} placeholder="Tarea / nota (opcional)" value="${s.tarea||""}" onchange="updateEquipoField('${entityType}',${entityId},${p.id},'tarea',this.value)">
+      <label><input type="checkbox" ${s.viaja?"checked":""} ${canEdit?"":"disabled"} onchange="updateEquipoField('${entityType}',${entityId},${p.id},'viaja',this.checked)"> ✈️ Viaja</label>
+    </div>`;
+  }).join("");
+  return `<div class="card">
+    <h3>Equipo asignado</h3>
+    <div style="font-size:11px;color:#888;margin:6px 0 10px;">${canEdit?"Tocá una persona para sumarla o sacarla del equipo de este show/contenido.":"Personas asignadas a este show/contenido."}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">${chips}</div>
+    ${rows?`<div style="margin-top:10px;">${rows}</div>`:""}
+    ${canEdit?`<div style="margin-top:12px;"><button class="btn btn-primary" style="font-size:11px;" onclick="saveEquipoAsignado('${entityType}',${entityId})">Guardar equipo</button></div>`:""}
+  </div>`;
+}
+
+function toggleEquipoPersona(entityType,entityId,personaId){
+  const key=eqKey(entityType,entityId);
+  const sel=eqEditState[key]||[];
+  const idx=sel.findIndex(s=>s.personaId===personaId);
+  if(idx>=0)sel.splice(idx,1);
+  else sel.push({personaId,rol:"",tarea:"",viaja:false});
+  eqEditState[key]=sel;
+  rerenderEquipoAsignado(entityType,entityId);
+}
+function updateEquipoField(entityType,entityId,personaId,field,value){
+  const key=eqKey(entityType,entityId);
+  const sel=eqEditState[key]||[];
+  const item=sel.find(s=>s.personaId===personaId);
+  if(item)item[field]=value;
+}
+function rerenderEquipoAsignado(entityType,entityId){
+  if(entityType==="show"&&fullDetailIdx!==null&&fullDetailActiveTab==="equipo"){
+    renderFullDetailIfOpen();
+  }
+}
+
+async function persistAsignaciones(entityType,entityId,items){
+  try{
+    const {error:delErr}=await sb.from("asignaciones").delete().eq("entity_type",entityType).eq("entity_id",entityId);
+    if(delErr){toast("⚠️ Error actualizando equipo: "+delErr.message);return false;}
+    ASIGNACIONES=ASIGNACIONES.filter(a=>!(a.entityType===entityType&&String(a.entityId)===String(entityId)));
+    if(items.length){
+      const payload=items.map(it=>({entity_type:entityType,entity_id:entityId,persona_id:it.personaId,rol_contexto:it.rol||"",tarea:it.tarea||"",viaja:!!it.viaja,estado:"confirmado"}));
+      const {data:inserted,error:insErr}=await sb.from("asignaciones").insert(payload).select();
+      if(insErr){toast("⚠️ Error guardando equipo: "+insErr.message);return false;}
+      (inserted||[]).forEach(row=>{
+        ASIGNACIONES.push({id:row.id,entityType:row.entity_type,entityId:row.entity_id,personaId:row.persona_id,rol:row.rol_contexto||"",tarea:row.tarea||"",viaja:!!row.viaja,estado:row.estado});
+      });
+    }
+    return true;
+  }catch(e){toast("⚠️ Error de conexión guardando equipo");return false;}
+}
+
+async function saveEquipoAsignado(entityType,entityId){
+  const key=eqKey(entityType,entityId);
+  const items=eqEditState[key]||[];
+  const ok=await persistAsignaciones(entityType,entityId,items);
+  if(!ok)return;
+  toast("✅ Equipo actualizado");
+  delete eqEditState[key]; // fuerza reconstrucción desde ASIGNACIONES ya actualizado
+  rerenderEquipoAsignado(entityType,entityId);
+}
 
 // ══════════════════════════════════════════════
 // DESCARGA COMPLETA DEL SHOW (todas las pestañas como HTML imprimible)
