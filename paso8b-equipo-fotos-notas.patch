@@ -1,0 +1,450 @@
+diff --git a/index.html b/index.html
+index 5ad21ed..9003289 100644
+--- a/index.html
++++ b/index.html
+@@ -472,7 +472,8 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
+ /* ── EQUIPO ── */
+ .team-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+ .team-card{background:var(--surface);border-radius:9px;padding:12px 14px;border:0.5px solid var(--border-soft);display:flex;align-items:center;gap:11px;}
+-.team-av{width:36px;height:36px;border-radius:50%;background:var(--p100);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--p800);flex-shrink:0;}
++.team-av{width:36px;height:36px;border-radius:50%;background:var(--p100);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--p800);flex-shrink:0;overflow:hidden;}
++.team-av img{width:100%;height:100%;object-fit:cover;}
+ .ti .tn{font-weight:600;font-size:12px;}.ti .tr{font-size:10px;color:#9690C2;}.ti .ta{font-size:10px;color:#8077B0;}
+ .team-card.inactivo{opacity:0.45;}
+ 
+@@ -483,6 +484,10 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
+ .eq-row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;padding:8px 10px;background:var(--surface);border-radius:7px;border:0.5px solid var(--border-soft);margin-top:6px;}
+ .eq-row input[type="text"]{padding:6px 8px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);width:100%;}
+ .eq-row label{display:flex;align-items:center;gap:5px;font-size:11px;color:#888;white-space:nowrap;}
++.eq-stack{display:flex;align-items:center;}
++.eq-stack .eq-av-mini{width:22px;height:22px;border-radius:50%;background:var(--p100);color:var(--p800);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--surface);margin-left:-7px;flex-shrink:0;overflow:hidden;}
++.eq-stack .eq-av-mini:first-child{margin-left:0;}
++.eq-stack .eq-av-mini img{width:100%;height:100%;object-fit:cover;}
+ 
+ /* ── TOAST ── */
+ .toast{position:fixed;bottom:24px;right:24px;background:var(--p900);color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;z-index:999;opacity:0;transform:translateY(8px);transition:all 0.3s;pointer-events:none;}
+@@ -675,7 +680,7 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
+     </div>
+     <div class="card" style="padding:0;overflow:hidden;">
+       <table class="tbl"><thead><tr>
+-        <th style="padding-left:14px">N°</th><th>Show</th><th>Venue · Ciudad</th><th>Fecha · Hora</th><th>Tipo</th><th>Aforo</th><th>Ticket</th><th>Ingr. est.</th><th>Estado</th>
++        <th style="padding-left:14px">N°</th><th>Show</th><th>Venue · Ciudad</th><th>Fecha · Hora</th><th>Tipo</th><th>Equipo</th><th>Aforo</th><th>Ticket</th><th>Ingr. est.</th><th>Estado</th>
+       </tr></thead><tbody id="shows-body"></tbody></table>
+     </div>
+   </div>
+@@ -833,6 +838,15 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
+           <button class="btn" style="font-size:11px;" onclick="hideAddPersonaForm()">✕</button>
+         </div>
+       </div>
++      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
++        <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Foto (URL, opcional)</label><input id="per-f-foto" type="text" placeholder="link a una foto/avatar" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);"></div>
++        <div><label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Vincular a perfil de login (opcional)</label>
++          <select id="per-f-perfil" style="width:100%;padding:7px 9px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);">
++            <option value="">— Ninguno —</option>
++          </select>
++        </div>
++      </div>
++      <div style="font-size:10px;color:#999;margin-top:6px;">Si no ponés foto pero vinculás un perfil que ya inició sesión con Google, se usa su foto de Google automáticamente.</div>
+     </div>
+     <div id="personas-grid" class="team-grid" style="margin-bottom:22px;">
+       <div style="font-size:11px;color:#aaa;">Cargando equipo…</div>
+@@ -1503,6 +1517,7 @@ let PRESETS_ROADMAP = loadPresets();
+ let SHOWS = [];
+ let editingIdx = null;
+ let activeShowIdx = null; // show actualmente abierto en la vista de detalle completo
++let panelActiveTab = "ficha"; // tab activo dentro del panel flotante
+ 
+ // ── HELPERS ──
+ function fmtDate(d){if(!d)return"—";const p=d.split("-");return p[2]+"/"+p[1]+"/"+p[0];}
+@@ -1750,6 +1765,12 @@ async function resolveSessionAndEnter(session,isFreshSignIn){
+ 
+   currentUser={id:perfil.id,loginName:perfil.nombre,nombre:perfil.nombre,rol:perfil.rol,exp:perfil.exp,nota:perfil.nota};
+ 
++  // Guardar la foto de Google en el perfil (fire-and-forget) para que Equipo pueda usarla como fallback
++  const googleAvatar=session.user.user_metadata?.avatar_url||session.user.user_metadata?.picture||"";
++  if(googleAvatar&&googleAvatar!==perfil.avatar_url){
++    sb.from("perfiles").update({avatar_url:googleAvatar}).eq("id",perfil.id).then(()=>{});
++  }
++
+   if(isFreshSignIn)sb.from("sesiones").insert({perfil_id:perfil.id}).then(()=>{});
+ 
+   document.getElementById("login-screen").style.display="none";
+@@ -1819,6 +1840,7 @@ async function enterApp(){
+   CONTENIDO = await loadContenido(); // carga después de SHOWS para tener el mapa showId→idx
+   PERSONAS = await loadPersonas();
+   ASIGNACIONES = await loadAsignaciones();
++  PERFILES_LITE = await loadPerfilesLite();
+   // Build all data-driven sections now that DOM is visible and user is known
+   buildShows();
+   buildDash();
+@@ -1859,6 +1881,7 @@ function buildShows(){
+       <td style="color:#777;">${s.venue}<br><span style="font-size:10px;color:#bbb;">${s.ciudad}</span></td>
+       <td style="font-variant-numeric:tabular-nums;">${fmtDate(s.fecha)}<br><span style="font-size:10px;color:#bbb;">${s.hora}</span></td>
+       <td><span class="tipo-pill ${tipoC(s.tipo)}">${s.tipo}</span></td>
++      <td>${equipoStackHTML("show",s.id,3)}</td>
+       <td>${s.aforo>0?s.aforo+"<br><span style='font-size:10px;color:#bbb;'>"+Math.round(s.obj*100)+"% obj.</span>":"—"}</td>
+       <td style="font-variant-numeric:tabular-nums;">${hideFin?"—":(s.ticket>0?fmtCLP(s.ticket):"—")}</td>
+       <td style="font-variant-numeric:tabular-nums;">${hideFin?"—":fmtM(ingr(s))}</td>
+@@ -1918,6 +1941,7 @@ function openPanel(idx){
+   {key:"resumen",id:"pt-resumen-btn",arg:"resumen",label:"📋 Resumen"},
+   {key:"info",id:"pt-info-btn",arg:"info",label:"ℹ️ Info"},
+   {key:"ficha",id:"pt-ficha-btn",arg:"ficha",label:"📝 Ficha técnica"},
++  {key:"equipo",id:"pt-equipo-btn",arg:"equipo",label:"👥 Equipo"},
+   {key:"roadmap",id:"pt-rm-btn",arg:"rm",label:"🗺 Hoja de ruta"},
+   {key:"presupuesto",id:"pt-pres-btn",arg:"presupuesto",label:"💰 Presupuesto"},
+   {key:"invitados",id:"pt-inv-btn",arg:"invitados",label:"🎫 Invitados"},
+@@ -1946,7 +1970,8 @@ function panelTab(tab,idx){
+     const fb=allowed[0]||"ficha";
+     tab=fb==="roadmap"?"rm":fb;
+   }
+-  ["resumen","info","ficha","rm","pres","inv","cierre","media"].forEach(t=>{
++  panelActiveTab=tab;
++  ["resumen","info","ficha","equipo","rm","pres","inv","cierre","media"].forEach(t=>{
+     const btn=document.getElementById("pt-"+t+"-btn");
+     const canonical=t==="rm"?"roadmap":t==="pres"?"presupuesto":t==="inv"?"invitados":t==="media"?"multimedia":t;
+     if(btn)btn.classList.toggle("active",canonical===tab||t===tab);
+@@ -1956,6 +1981,7 @@ function panelTab(tab,idx){
+   if(tab==="resumen")body.innerHTML=panelResumenHTML(s,idx);
+   else if(tab==="info")body.innerHTML=panelInfoHTML(s,idx);
+   else if(tab==="ficha")body.innerHTML=panelFichaHTML(s,idx);
++  else if(tab==="equipo"){const canEdit=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;body.innerHTML=equipoAsignadoHTML("show",s.id,canEdit);}
+   else if(tab==="rm")body.innerHTML=panelRoadmapSummaryHTML(s,idx);
+   else if(tab==="presupuesto")body.innerHTML=presupuestoShowHTML(s,idx,true);
+   else if(tab==="invitados")body.innerHTML=invitadosHTML(s,idx,true);
+@@ -4986,11 +5012,13 @@ function deleteCdFromDetail(id){
+ 
+ // ══════════════════════════════════════════════
+ // EQUIPO: personas (registro real) + asignaciones (equipo de trabajo por show/contenido)
++// + fotos (manual o de Google vía perfil vinculado) + agenda/carga por persona + notas
+ // ══════════════════════════════════════════════
+ 
+ const PERSONA_AREAS=['Producción','Técnica','Creativo','Marketing','Artístico'];
+ let PERSONAS=[];
+ let ASIGNACIONES=[];
++let PERFILES_LITE=[];
+ let editingPersonaId=null;
+ 
+ async function loadPersonas(){
+@@ -5000,6 +5028,7 @@ async function loadPersonas(){
+     return (data||[]).map(p=>({
+       id:p.id, nombre:p.nombre||"", cargo:p.cargo||"", area:p.area||"Producción",
+       contacto:p.contacto||"", activo:p.activo!==false, nota:p.nota||"",
++      fotoUrl:p.foto_url||"", perfilId:p.perfil_id||null,
+     }));
+   }catch(e){ toast("⚠️ Error de conexión cargando equipo"); return []; }
+ }
+@@ -5015,12 +5044,47 @@ async function loadAsignaciones(){
+   }catch(e){ toast("⚠️ Error de conexión cargando asignaciones de equipo"); return []; }
+ }
+ 
++// Lista liviana de perfiles de login (id, nombre, avatar de Google si ya inició sesión alguna vez).
++// Se usa para: (a) el selector "vincular a perfil" en el form de personas, (b) fallback de foto.
++async function loadPerfilesLite(){
++  try{
++    const {data,error}=await sb.from("perfiles").select("id,nombre,avatar_url");
++    if(error)return [];
++    return (data||[]).map(p=>({id:p.id,nombre:p.nombre||"",avatarUrl:p.avatar_url||""}));
++  }catch(e){ return []; }
++}
++
++// ── Avatares: foto manual > foto de Google del perfil vinculado > inicial con color ──
++function personaAvatarSrc(p){
++  if(p.fotoUrl)return p.fotoUrl;
++  if(p.perfilId){
++    const perfil=PERFILES_LITE.find(x=>String(x.id)===String(p.perfilId));
++    if(perfil&&perfil.avatarUrl)return perfil.avatarUrl;
++  }
++  return null;
++}
++function personaAvatarHTML(p,cls){
++  const letter=(p.nombre||"?").charAt(0).toUpperCase();
++  const src=personaAvatarSrc(p);
++  if(src)return `<div class="${cls}"><img src="${src}" alt="" onerror="this.outerHTML='${letter}'"></div>`;
++  return `<div class="${cls}">${letter}</div>`;
++}
++
++function populatePerfilSelect(selectedId){
++  const sel=document.getElementById("per-f-perfil");
++  if(!sel)return;
++  sel.innerHTML='<option value="">— Ninguno —</option>'+PERFILES_LITE.map(pf=>
++    `<option value="${pf.id}" ${String(pf.id)===String(selectedId)?"selected":""}>${pf.nombre}</option>`
++  ).join("");
++}
++
+ // ── CRUD de personas (sección Equipo) ──
+ function showAddPersonaForm(){
+   editingPersonaId=null;
+   document.getElementById("persona-add-area").style.display="block";
+-  ["per-f-nombre","per-f-cargo","per-f-contacto"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
++  ["per-f-nombre","per-f-cargo","per-f-contacto","per-f-foto"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+   document.getElementById("per-f-area").value="Producción";
++  populatePerfilSelect(null);
+ }
+ function hideAddPersonaForm(){
+   document.getElementById("persona-add-area").style.display="none";
+@@ -5035,27 +5099,29 @@ function editPersona(id){
+   document.getElementById("per-f-cargo").value=p.cargo;
+   document.getElementById("per-f-area").value=p.area;
+   document.getElementById("per-f-contacto").value=p.contacto;
++  document.getElementById("per-f-foto").value=p.fotoUrl||"";
++  populatePerfilSelect(p.perfilId);
+ }
+ async function savePersona(){
+   const nombre=document.getElementById("per-f-nombre").value.trim();
+   if(!nombre){toast("⚠️ Ingresá un nombre.");return;}
+-  const payload={
+-    nombre,
+-    cargo:document.getElementById("per-f-cargo").value.trim(),
+-    area:document.getElementById("per-f-area").value,
+-    contacto:document.getElementById("per-f-contacto").value.trim(),
+-  };
++  const cargo=document.getElementById("per-f-cargo").value.trim();
++  const area=document.getElementById("per-f-area").value;
++  const contacto=document.getElementById("per-f-contacto").value.trim();
++  const fotoUrl=document.getElementById("per-f-foto").value.trim();
++  const perfilIdRaw=document.getElementById("per-f-perfil").value;
++  const payload={nombre,cargo,area,contacto,foto_url:fotoUrl||null,perfil_id:perfilIdRaw||null};
+   try{
+     if(editingPersonaId!=null){
+       const {error}=await sb.from("personas").update(payload).eq("id",editingPersonaId);
+       if(error){toast("⚠️ Error guardando: "+error.message);return;}
+       const idx=PERSONAS.findIndex(p=>p.id===editingPersonaId);
+-      if(idx>=0)PERSONAS[idx]={...PERSONAS[idx],...payload};
++      if(idx>=0)PERSONAS[idx]={...PERSONAS[idx],nombre,cargo,area,contacto,fotoUrl,perfilId:perfilIdRaw||null};
+       toast("✅ Persona actualizada");
+     } else {
+       const {data,error}=await sb.from("personas").insert({...payload,activo:true}).select().single();
+       if(error){toast("⚠️ Error guardando: "+error.message);return;}
+-      PERSONAS.push({id:data.id,nombre:data.nombre,cargo:data.cargo||"",area:data.area,contacto:data.contacto||"",activo:true,nota:""});
++      PERSONAS.push({id:data.id,nombre:data.nombre,cargo:data.cargo||"",area:data.area,contacto:data.contacto||"",fotoUrl:data.foto_url||"",perfilId:data.perfil_id||null,activo:true,nota:""});
+       toast("✅ Persona agregada");
+     }
+   }catch(e){toast("⚠️ Error de conexión guardando persona");return;}
+@@ -5077,18 +5143,70 @@ async function togglePersonaActivo(id){
+ async function deletePersona(id){
+   const p=PERSONAS.find(x=>x.id===id);
+   if(!p)return;
+-  if(!confirm("¿Eliminar a "+p.nombre+" del equipo? También se quitará de cualquier show/contenido donde esté asignada."))return;
++  if(!confirm("¿Eliminar a "+p.nombre+" del equipo? También se quitará de cualquier show/contenido donde esté asignada, y sus notas."))return;
+   try{
+     const {error}=await sb.from("personas").delete().eq("id",id);
+     if(error){toast("⚠️ Error eliminando: "+error.message);return;}
+     PERSONAS=PERSONAS.filter(x=>x.id!==id);
+     ASIGNACIONES=ASIGNACIONES.filter(a=>a.personaId!==id); // cascade ya las borró en DB
++    sb.from("notas_equipo").delete().eq("entity_type","persona").eq("entity_id",id).then(()=>{});
++    delete NOTAS_CACHE[eqKey("persona",id)];
+     toast("🗑 Persona eliminada");
+   }catch(e){toast("⚠️ Error de conexión eliminando persona");return;}
+   buildEquipo();
+   renderFullDetailIfOpen();
+ }
+ 
++// ── Agenda/carga por persona: próximos shows asignados ──
++function personaUpcomingAsignaciones(personaId){
++  const today=new Date();today.setHours(0,0,0,0);
++  return ASIGNACIONES.filter(a=>a.personaId===personaId&&a.entityType==="show")
++    .map(a=>({a,show:SHOWS.find(s=>String(s.id)===String(a.entityId))}))
++    .filter(x=>x.show&&x.show.fecha&&new Date(x.show.fecha)>=today)
++    .sort((x,y)=>new Date(x.show.fecha)-new Date(y.show.fecha));
++}
++
++function togglePersonaExtra(id){
++  const el=document.getElementById("persona-extra-"+id);
++  if(!el)return;
++  const open=el.style.display!=="none"&&el.style.display!=="";
++  if(open){el.style.display="none";return;}
++  el.style.display="block";
++  renderPersonaExtra(id);
++}
++function renderPersonaExtra(id){
++  const el=document.getElementById("persona-extra-"+id);
++  if(!el)return;
++  const upcoming=personaUpcomingAsignaciones(id);
++  const agendaHTML=upcoming.length?upcoming.map(({a,show})=>`
++    <div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border-soft);font-size:11px;">
++      <span>${fmtDate(show.fecha)} · ${show.nombre}${a.rol?" ("+a.rol+")":""}</span>
++      ${a.viaja?'<span title="Viaja">✈️</span>':""}
++    </div>`).join(""):"<div style='font-size:11px;color:#aaa;'>Sin shows próximos asignados.</div>";
++  el.innerHTML=`<div class="card" style="margin-top:6px;">
++      <h3 style="font-size:11px;">📅 Próximos shows</h3>
++      <div style="margin-top:6px;">${agendaHTML}</div>
++    </div>
++    ${notasHTML("persona",id)}`;
++}
++
++// ── Asignaciones genéricas (equipo de trabajo por show o contenido) ──
++function getAsignaciones(entityType,entityId){
++  return ASIGNACIONES.filter(a=>a.entityType===entityType&&String(a.entityId)===String(entityId));
++}
++
++function equipoStackHTML(entityType,entityId,max){
++  const asign=getAsignaciones(entityType,entityId);
++  const personasAsig=asign.map(a=>PERSONAS.find(p=>p.id===a.personaId)).filter(Boolean);
++  if(!personasAsig.length)return '<span style="font-size:10px;color:#bbb;">—</span>';
++  const shown=personasAsig.slice(0,max);
++  const extra=personasAsig.length-shown.length;
++  const avs=shown.map(p=>personaAvatarHTML(p,"eq-av-mini")).join("");
++  const extraHTML=extra>0?`<div class="eq-av-mini" style="background:#eee;color:#999;">+${extra}</div>`:"";
++  const title=personasAsig.map(p=>p.nombre).join(", ").replace(/"/g,"&quot;");
++  return `<div class="eq-stack" title="${title}">${avs}${extraHTML}</div>`;
++}
++
+ function buildEquipo(){
+   const canEdit=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;
+   const addBtn=document.getElementById("persona-add-btn");
+@@ -5101,25 +5219,28 @@ function buildEquipo(){
+   }
+   const activos=PERSONAS.filter(p=>p.activo);
+   const inactivos=PERSONAS.filter(p=>!p.activo);
+-  grid.innerHTML=[...activos,...inactivos].map(p=>`
+-    <div class="team-card ${p.activo?"":"inactivo"}">
+-      <div class="team-av">${(p.nombre||"?").charAt(0).toUpperCase()}</div>
+-      <div class="ti" style="flex:1;">
+-        <div class="tn">${p.nombre}${p.activo?"":" <span style='font-size:9px;color:#bbb;'>(inactiva)</span>"}</div>
+-        <div class="tr">${p.cargo||"—"}</div>
+-        <div class="ta">${p.area}${p.contacto?" · "+p.contacto:""}</div>
++  grid.innerHTML=[...activos,...inactivos].map(p=>{
++    const upcoming=personaUpcomingAsignaciones(p.id);
++    return `<div>
++      <div class="team-card ${p.activo?"":"inactivo"}">
++        ${personaAvatarHTML(p,"team-av")}
++        <div class="ti" style="flex:1;">
++          <div class="tn">${p.nombre}${p.activo?"":" <span style='font-size:9px;color:#bbb;'>(inactiva)</span>"}</div>
++          <div class="tr">${p.cargo||"—"}</div>
++          <div class="ta">${p.area}${p.contacto?" · "+p.contacto:""}</div>
++        </div>
++        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
++          <button class="btn" style="font-size:9px;padding:2px 7px;white-space:nowrap;" onclick="togglePersonaExtra(${p.id})">📅 ${upcoming.length} próx. · 🗒 notas</button>
++          ${canEdit?`<div style="display:flex;gap:4px;">
++            <button class="btn" style="font-size:9px;padding:2px 7px;" onclick="editPersona(${p.id})">Editar</button>
++            <button class="btn" style="font-size:9px;padding:2px 7px;" onclick="togglePersonaActivo(${p.id})">${p.activo?"Desactivar":"Activar"}</button>
++            <button class="btn" style="font-size:9px;padding:2px 7px;color:var(--r600);border-color:var(--r100);" onclick="deletePersona(${p.id})">Eliminar</button>
++          </div>`:""}
++        </div>
+       </div>
+-      ${canEdit?`<div style="display:flex;flex-direction:column;gap:4px;">
+-        <button class="btn" style="font-size:9px;padding:2px 7px;" onclick="editPersona(${p.id})">Editar</button>
+-        <button class="btn" style="font-size:9px;padding:2px 7px;" onclick="togglePersonaActivo(${p.id})">${p.activo?"Desactivar":"Activar"}</button>
+-        <button class="btn" style="font-size:9px;padding:2px 7px;color:var(--r600);border-color:var(--r100);" onclick="deletePersona(${p.id})">Eliminar</button>
+-      </div>`:""}
+-    </div>`).join("");
+-}
+-
+-// ── Asignaciones genéricas (equipo de trabajo por show o contenido) ──
+-function getAsignaciones(entityType,entityId){
+-  return ASIGNACIONES.filter(a=>a.entityType===entityType&&String(a.entityId)===String(entityId));
++      <div id="persona-extra-${p.id}" style="display:none;"></div>
++    </div>`;
++  }).join("");
+ }
+ 
+ // Estado temporal de edición mientras se arma la selección, antes de guardar
+@@ -5156,7 +5277,8 @@ function equipoAsignadoHTML(entityType,entityId,canEdit){
+     <div style="display:flex;flex-wrap:wrap;gap:6px;">${chips}</div>
+     ${rows?`<div style="margin-top:10px;">${rows}</div>`:""}
+     ${canEdit?`<div style="margin-top:12px;"><button class="btn btn-primary" style="font-size:11px;" onclick="saveEquipoAsignado('${entityType}',${entityId})">Guardar equipo</button></div>`:""}
+-  </div>`;
++  </div>
++  ${notasHTML(entityType,entityId)}`;
+ }
+ 
+ function toggleEquipoPersona(entityType,entityId,personaId){
+@@ -5175,9 +5297,14 @@ function updateEquipoField(entityType,entityId,personaId,field,value){
+   if(item)item[field]=value;
+ }
+ function rerenderEquipoAsignado(entityType,entityId){
+-  if(entityType==="show"&&fullDetailIdx!==null&&fullDetailActiveTab==="equipo"){
++  if(entityType!=="show")return;
++  if(fullDetailIdx!==null&&fullDetailActiveTab==="equipo"&&String(SHOWS[fullDetailIdx]?.id)===String(entityId)){
+     renderFullDetailIfOpen();
+   }
++  const panelOpen=document.getElementById("panel-overlay")?.classList.contains("open");
++  if(panelOpen&&panelActiveTab==="equipo"&&activeShowIdx!=null&&String(SHOWS[activeShowIdx]?.id)===String(entityId)){
++    panelTab("equipo",activeShowIdx);
++  }
+ }
+ 
+ async function persistAsignaciones(entityType,entityId,items){
+@@ -5205,6 +5332,82 @@ async function saveEquipoAsignado(entityType,entityId){
+   toast("✅ Equipo actualizado");
+   delete eqEditState[key]; // fuerza reconstrucción desde ASIGNACIONES ya actualizado
+   rerenderEquipoAsignado(entityType,entityId);
++  buildEquipo(); // refresca mini-avatares/contadores si la sección Equipo está visible
++}
++
++// ── Notas: feed simple por persona o por show (sirve también como "bitácora de equipo") ──
++let NOTAS_CACHE={};
++function notasContainerId(entityType,entityId){return "notas-c-"+entityType+"-"+entityId;}
++
++function notasHTML(entityType,entityId){
++  const key=eqKey(entityType,entityId);
++  const cid=notasContainerId(entityType,entityId);
++  if(!NOTAS_CACHE[key]){
++    NOTAS_CACHE[key]="loading";
++    fetchNotas(entityType,entityId);
++  }
++  return `<div class="card" style="margin-top:10px;">
++    <h3>🗒 Notas</h3>
++    <div id="${cid}" style="margin-top:6px;">${renderNotasInner(entityType,entityId)}</div>
++  </div>`;
++}
++async function fetchNotas(entityType,entityId){
++  const key=eqKey(entityType,entityId);
++  try{
++    const {data,error}=await sb.from("notas_equipo").select("*").eq("entity_type",entityType).eq("entity_id",entityId).order("id",{ascending:true});
++    if(error){toast("⚠️ Error cargando notas: "+error.message);NOTAS_CACHE[key]=[];}
++    else NOTAS_CACHE[key]=(data||[]).map(n=>({id:n.id,autor:n.autor||"",texto:n.texto||"",createdAt:n.created_at}));
++  }catch(e){NOTAS_CACHE[key]=[];}
++  const el=document.getElementById(notasContainerId(entityType,entityId));
++  if(el)el.innerHTML=renderNotasInner(entityType,entityId);
++}
++function renderNotasInner(entityType,entityId){
++  const key=eqKey(entityType,entityId);
++  const list=NOTAS_CACHE[key];
++  const canDelete=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;
++  let listHTML;
++  if(list==="loading"||list===undefined)listHTML="<div style='font-size:11px;color:#aaa;'>Cargando…</div>";
++  else if(!list.length)listHTML="<div style='font-size:11px;color:#aaa;'>Sin notas todavía.</div>";
++  else listHTML=list.map(n=>`
++    <div style="padding:6px 0;border-bottom:0.5px solid var(--border-soft);font-size:11px;">
++      <div style="display:flex;justify-content:space-between;gap:8px;">
++        <strong>${(n.autor||"—").replace(/</g,"&lt;")}</strong>
++        ${canDelete?`<button class="btn" style="font-size:9px;padding:1px 5px;" onclick="deleteNota('${entityType}',${entityId},${n.id})">✕</button>`:""}
++      </div>
++      <div style="color:#888;margin-top:2px;white-space:pre-wrap;">${(n.texto||"").replace(/</g,"&lt;")}</div>
++    </div>`).join("");
++  return `${listHTML}
++    <div style="margin-top:8px;display:flex;gap:6px;">
++      <input type="text" id="nota-input-${entityType}-${entityId}" placeholder="Escribir una nota para el equipo..." style="flex:1;padding:6px 8px;border:0.5px solid #ddd;border-radius:6px;font-size:11px;font-family:var(--font);" onkeydown="if(event.key==='Enter')addNota('${entityType}',${entityId})">
++      <button class="btn btn-primary" style="font-size:11px;" onclick="addNota('${entityType}',${entityId})">Agregar</button>
++    </div>`;
++}
++async function addNota(entityType,entityId){
++  const input=document.getElementById("nota-input-"+entityType+"-"+entityId);
++  const texto=input?input.value.trim():"";
++  if(!texto)return;
++  const autor=currentUser?currentUser.nombre:"—";
++  try{
++    const {data,error}=await sb.from("notas_equipo").insert({entity_type:entityType,entity_id:entityId,autor,texto}).select().single();
++    if(error){toast("⚠️ Error guardando nota: "+error.message);return;}
++    const key=eqKey(entityType,entityId);
++    if(!Array.isArray(NOTAS_CACHE[key]))NOTAS_CACHE[key]=[];
++    NOTAS_CACHE[key].push({id:data.id,autor:data.autor,texto:data.texto,createdAt:data.created_at});
++    if(input)input.value="";
++    const el=document.getElementById(notasContainerId(entityType,entityId));
++    if(el)el.innerHTML=renderNotasInner(entityType,entityId);
++  }catch(e){toast("⚠️ Error de conexión guardando nota");}
++}
++async function deleteNota(entityType,entityId,notaId){
++  if(!confirm("¿Eliminar esta nota?"))return;
++  try{
++    const {error}=await sb.from("notas_equipo").delete().eq("id",notaId);
++    if(error){toast("⚠️ Error eliminando: "+error.message);return;}
++    const key=eqKey(entityType,entityId);
++    if(Array.isArray(NOTAS_CACHE[key]))NOTAS_CACHE[key]=NOTAS_CACHE[key].filter(n=>n.id!==notaId);
++    const el=document.getElementById(notasContainerId(entityType,entityId));
++    if(el)el.innerHTML=renderNotasInner(entityType,entityId);
++  }catch(e){toast("⚠️ Error de conexión eliminando nota");}
+ }
+ 
+ // ══════════════════════════════════════════════
