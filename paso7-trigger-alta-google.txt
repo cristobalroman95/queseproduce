@@ -1,0 +1,4 @@
+ajustar rol
+-- Para subir a alguien de "invitado" a un rol real, simplemente:
+-- update public.perfiles set rol = 'productor' where id = '<uuid-del-usuario>';
+-- (el uuid y el email se ven en Authentication → Users)

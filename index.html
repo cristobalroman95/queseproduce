@@ -38,6 +38,15 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .login-input::placeholder{color:rgba(255,255,255,0.25);}
 .login-btn{width:100%;padding:12px;background:var(--c400);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-family:var(--font-display);cursor:pointer;transition:all 0.2s;margin-top:4px;}
 .login-btn:hover{background:var(--c600);transform:translateY(-1px);}
+.login-btn-google{display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#3c4043;text-transform:none;letter-spacing:0;font-family:var(--font);font-size:14px;font-weight:600;}
+.login-btn-google:hover{background:#f5f5f5;transform:translateY(-1px);}
+.login-btn-google svg{flex-shrink:0;}
+.login-status{font-size:12px;line-height:1.5;text-align:center;margin-top:16px;padding:12px 14px;border-radius:8px;display:none;}
+.login-status.show{display:block;}
+.login-status-pending{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.75);border:0.5px solid rgba(255,255,255,0.15);}
+.login-status-error{background:rgba(232,93,93,0.12);color:#F3B8B8;border:0.5px solid rgba(232,93,93,0.3);}
+.login-status-error button{display:block;margin:10px auto 0;background:none;border:0.5px solid rgba(255,255,255,0.3);color:#fff;padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;}
+.login-status-error button:hover{background:rgba(255,255,255,0.1);}
 .login-error{font-size:11px;color:var(--c200);margin-top:10px;text-align:center;min-height:16px;}
 .login-role-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;margin-bottom:20px;}
 
@@ -460,12 +469,13 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
 <div id="login-screen">
   <div class="login-box">
     <div class="login-logo">QueseProduce</div>
-    <div class="login-sub">Plataforma de Producción 2026 · Acceso por credenciales</div>
-    <div class="login-label">Email</div>
-<input class="login-input" id="login-name" type="email" placeholder="tu@email.com" autocomplete="off"/>
-<div class="login-label">Contraseña</div>
-<input class="login-input" id="login-pin" type="password" placeholder="••••••••" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()"/>
-    <button class="login-btn" onclick="doLogin()">Entrar →</button>
+    <div class="login-sub">Plataforma de Producción 2026 · Acceso con Google</div>
+    <button class="login-btn login-btn-google" id="login-google-btn" onclick="loginWithGoogle()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.91c1.7-1.57 2.69-3.88 2.69-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.91-2.27c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.59-5.05-3.72H.92v2.34C2.4 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.95 10.69A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.16.27-1.69V4.97H.92A8.99 8.99 0 0 0 0 9c0 1.45.35 2.83.92 4.03l3.03-2.34z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.4 2.02.92 4.97l3.03 2.34C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+      Acceder con Google
+    </button>
+    <div class="login-status login-status-pending" id="login-pending">Conectando con tu cuenta de Google…</div>
+    <div class="login-status login-status-error" id="login-status-error"></div>
     <div class="login-error" id="login-error"></div>
   </div>
 </div>
@@ -1619,6 +1629,11 @@ const AUTH_KEY="qp_users_v1";
 const SESSION_KEY="qp_session_v1";
 
 const ROLE_DEFS={
+  // ⚠️ TEMPORAL: "invitado" es el rol que se asigna automáticamente a cualquiera que entre con Google
+  // por primera vez (ver trigger en Supabase). Hoy tiene visión completa, igual que "programador",
+  // a propósito — decisión tomada el 20-jun-2026 mientras se valida el alta por Google.
+  // Ajustar acá (o directamente el campo `rol` en la tabla `perfiles`) cuando se quiera restringir.
+  invitado:{label:"Invitado",icon:"👋",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo","usuarios"],canEdit:true,showFinancials:true},
   programador:{label:"Programador",icon:"⬛",color:"#1a1a18",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo","usuarios"],canEdit:true,showFinancials:true},
   productor:{label:"Productor",icon:"🎬",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
   artista:{label:"Artista",icon:"🎤",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
@@ -1666,37 +1681,56 @@ function loadUsers(){
 }
 function saveUsers(users){localStorage.setItem(AUTH_KEY,JSON.stringify(users));}
 
-async function doLogin(){
-  const email=document.getElementById("login-name").value.trim();
-  const password=document.getElementById("login-pin").value.trim();
+async function loginWithGoogle(){
   const err=document.getElementById("login-error");
+  const statusErr=document.getElementById("login-status-error");
   err.textContent="";
-  if(!email||!password){err.textContent="Ingresá tu email y contraseña.";return;}
-
-  const {data,error}=await sb.auth.signInWithPassword({email,password});
+  statusErr.classList.remove("show");
+  const btn=document.getElementById("login-google-btn");
+  if(btn)btn.disabled=true;
+  const {error}=await sb.auth.signInWithOAuth({
+    provider:"google",
+    options:{redirectTo:window.location.origin+window.location.pathname}
+  });
   if(error){
-    err.textContent="Email o contraseña incorrectos.";
-    return;
+    if(btn)btn.disabled=false;
+    err.textContent="No se pudo iniciar el acceso con Google. Probá de nuevo.";
   }
+  // Si no hay error, la página redirige a Google y vuelve — el resto del flujo
+  // (buscar perfil, chequear vencimiento, entrar) lo maneja resolveSessionAndEnter()
+  // desde el listener onAuthStateChange al final del archivo.
+}
 
-  // Login OK en Auth — ahora traemos el perfil (nombre, rol, vencimiento)
-  const {data:perfil,error:perfilErr}=await sb
-    .from("perfiles")
-    .select("*")
-    .eq("id",data.user.id)
-    .single();
+// Busca el perfil para una sesión activa y entra a la app. Reintenta una vez si el
+// perfil todavía no existe (cubre el caso raro en que el trigger de alta automática
+// en Supabase tarde unos milisegundos más que el round-trip del login).
+async function resolveSessionAndEnter(session,isFreshSignIn){
+  const pending=document.getElementById("login-pending");
+  const statusErr=document.getElementById("login-status-error");
+  pending.classList.add("show");
+  statusErr.classList.remove("show");
+
+  let perfil=null,perfilErr=null;
+  for(let intento=0;intento<2;intento++){
+    const res=await sb.from("perfiles").select("*").eq("id",session.user.id).single();
+    perfil=res.data;perfilErr=res.error;
+    if(perfil)break;
+    if(intento===0)await new Promise(r=>setTimeout(r,1200));
+  }
+  pending.classList.remove("show");
 
   if(perfilErr||!perfil){
-    err.textContent="No se encontró tu perfil. Contactá al programador.";
+    statusErr.innerHTML="Iniciaste sesión con Google correctamente, pero todavía no tenés un perfil asignado en QueseProduce.<br>Avisale al programador para que te dé acceso — esto puede demorar unos minutos.<br><button onclick=\"location.reload()\">Reintentar</button>";
+    statusErr.classList.add("show");
     await sb.auth.signOut();
     return;
   }
 
-  // Vencimiento
   if(perfil.exp){
     const exp=new Date(perfil.exp);exp.setHours(23,59,59);
     if(new Date()>exp){
-      err.textContent="Tu acceso venció el "+perfil.exp+". Contactá al programador.";
+      statusErr.innerHTML="Tu acceso venció el "+perfil.exp+". Contactá al programador para renovarlo.<br><button onclick=\"location.reload()\">Volver</button>";
+      statusErr.classList.add("show");
       await sb.auth.signOut();
       return;
     }
@@ -1704,8 +1738,7 @@ async function doLogin(){
 
   currentUser={id:perfil.id,loginName:perfil.nombre,nombre:perfil.nombre,rol:perfil.rol,exp:perfil.exp,nota:perfil.nota};
 
-  // Log de sesión (no crítico si falla)
-  sb.from("sesiones").insert({perfil_id:perfil.id}).then(()=>{});
+  if(isFreshSignIn)sb.from("sesiones").insert({perfil_id:perfil.id}).then(()=>{});
 
   document.getElementById("login-screen").style.display="none";
   await enterApp();
@@ -3897,8 +3930,8 @@ function forceSyncInvitados(showIdx){
 }
 
 // ── USER MANAGEMENT (Programador only) ──
-const ROLE_LABELS={programador:"Programador",productor:"Productor",artista:"Artista",contador:"Contador",tecnico:"Técnico",marketing:"Marketing"};
-const ROLE_ICONS={programador:"⬛",productor:"🎬",artista:"🎤",contador:"📊",tecnico:"🔧",marketing:"📣"};
+const ROLE_LABELS={invitado:"Invitado",programador:"Programador",productor:"Productor",artista:"Artista",contador:"Contador",tecnico:"Técnico",marketing:"Marketing"};
+const ROLE_ICONS={invitado:"👋",programador:"⬛",productor:"🎬",artista:"🎤",contador:"📊",tecnico:"🔧",marketing:"📣"};
 
 function buildUsersTable(){
   const users=loadUsers();
@@ -4922,22 +4955,17 @@ setTimeout(()=>window.print(),600);
 applyStoredEdits();
 
 // Check for existing session or show login
-(async function initAuth(){
-  document.getElementById("landing").style.display="none";
-  document.getElementById("app").style.display="none";
+document.getElementById("landing").style.display="none";
+document.getElementById("app").style.display="none";
 
-  const {data:{session}}=await sb.auth.getSession();
+sb.auth.onAuthStateChange(async (event,session)=>{
   if(session){
-    const {data:perfil}=await sb.from("perfiles").select("*").eq("id",session.user.id).single();
-    if(perfil){
-      currentUser={id:perfil.id,loginName:perfil.nombre,nombre:perfil.nombre,rol:perfil.rol,exp:perfil.exp,nota:perfil.nota};
-      document.getElementById("login-screen").style.display="none";
-      await enterApp();
-      return;
-    }
+    await resolveSessionAndEnter(session,event==="SIGNED_IN");
+  }else{
+    currentUser=null;
+    document.getElementById("login-screen").style.display="flex";
   }
-  document.getElementById("login-screen").style.display="flex";
-})();
+});
 </script>
 </body>
 </html>
