@@ -1,5 +1,5 @@
 # QueseProduce — Arquitectura y Convenciones Técnicas
-*Versión: 1.0 — 22 de junio de 2026*
+*Versión: 1.1 — 22 de junio de 2026*
 
 ## 1. Visión General
 QueseProduce es una **aplicación de página única (SPA)** para la gestión integral de producción de shows en vivo. Su objetivo es centralizar la planificación, el presupuesto, el equipo y el contenido digital de una temporada de eventos.
@@ -13,23 +13,24 @@ QueseProduce es una **aplicación de página única (SPA)** para la gestión int
 | **Cliente DB** | `supabase-js` (CDN) | Conexión directa desde el navegador con `anon key` pública. |
 
 ## 3. Estructura de Archivos (Frontend)
-├── index.html # Shell HTML. Importa CSS y JS.
+```
+├── index.html        # Shell HTML. Importa CSS y JS.
 ├── css/
-│ └── app.css # Todos los estilos (variables, layout, componentes).
+│   └── app.css       # Todos los estilos (variables, layout, componentes).
 └── js/
-├── config.js # Constantes: SUPABASE_URL, ANON_KEY, BUCKET_NAME.
-├── data.js # Datos por defecto (shows, presets, defaults).
-├── app.js # Helpers globales (fmtDate, toast, nav, modo edición).
-├── auth.js # Google Login, ROLE_DEFS, restricciones de UI.
-├── shows.js # CRUD de Shows, Ficha Técnica, Paneles de detalle.
-├── roadmap.js # Hoja de ruta (secciones y tareas), Presets.
-├── presupuesto.js # Presupuesto, Cierre, Invitados.
-├── finanzas.js # Reportes gráficos y financieros (EECC, Flujo).
-├── contenido.js # Módulo de Contenido Digital (CRUD, Kanban, Gantt).
-├── equipo.js # Equipo (Personas, Asignaciones, Multimedia, Bitácora).
-├── planner.js # Planificador (vista Lista actual, Coordinación).
-└── export.js # Exportación a CSV y descarga de Fichas.
-
+    ├── config.js     # Constantes: SUPABASE_URL, ANON_KEY, BUCKET_NAME.
+    ├── data.js       # Datos por defecto (shows, presets, defaults).
+    ├── app.js        # Helpers globales (fmtDate, toast, nav, modo edición).
+    ├── auth.js       # Google Login, ROLE_DEFS, restricciones de UI.
+    ├── shows.js      # CRUD de Shows, Ficha Técnica, Paneles de detalle.
+    ├── roadmap.js    # Hoja de ruta (secciones y tareas), Presets.
+    ├── presupuesto.js# Presupuesto, Cierre, Invitados.
+    ├── finanzas.js   # Reportes gráficos y financieros (EECC, Flujo).
+    ├── contenido.js  # Módulo de Contenido Digital (CRUD, Kanban, Gantt).
+    ├── equipo.js     # Equipo (Personas, Asignaciones, Multimedia, Bitácora).
+    ├── planner.js    # Planificador (vistas Anual, Calendario; dispatcher _renderPlannerView).
+    └── export.js     # Exportación a CSV y descarga de Fichas.
+```
 
 ## 4. Modelo de Datos Clave (Supabase)
 | Tabla | Propósito | Relación |
@@ -68,5 +69,11 @@ Para mantener la integridad de las FK y evitar IDs huérfanos, se usa un patrón
 - **Paneles:** Los detalles de shows se abren en un overlay (`panel-overlay`) o en vista completa (`full-detail-overlay`). Las piezas de contenido usan su propio overlay (`cd-full-detail-overlay`).
 - **Sincronización:** Tras cualquier cambio, se actualiza la vista activa (re-render) sin recargar la página.
 
+## 8. Convenciones del Planner
+- **Dispatcher central:** `_renderPlannerView()` decide qué función de build llamar según `plActiveView`. Siempre llamar esto desde `nav()` y `enterApp()`, nunca `buildPlanner()` directamente.
+- **Selector de vista:** `#pl-view-tabs` en `index.html` con tabs `.pl-view-tab`. Agregar nuevas vistas (Gantt, Kanban) sumando un tab aquí y un case en `_renderPlannerView()`.
+- **Filtro de tipo:** `plActiveFilter` (`todos` / `shows` / `contenido`) es transversal a todas las vistas del Planner.
+- **`groupByWeek(items, getFecha)`:** Función global en `planner.js`. Recibe un array y un getter de fecha, devuelve semanas `{key, monday, sunday, items}` ordenadas. Reutilizar en Gantt y Kanban.
+
 ---
-*Este documento se actualiza solo cuando hay cambios estructurales importantes en la arquitectura o convenciones de código.*
+*Este documento se actualiza cuando hay cambios estructurales importantes en la arquitectura o convenciones de código.*

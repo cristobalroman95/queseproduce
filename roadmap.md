@@ -1,121 +1,96 @@
 # QueseProduce — Roadmap de Desarrollo (Pendientes)
-*Versión: 2.0 — 22 de junio de 2026*
+*Versión: 2.1 — 22 de junio de 2026*
 
-Este documento lista exclusivamente las **tareas pendientes** y el orden de prioridad para la evolución de la plataforma. 
+Este documento lista exclusivamente las **tareas pendientes** y el orden de prioridad para la evolución de la plataforma.
 Las bases (CRUD de shows, contenido digital, equipo, finanzas y hoja de ruta) están **completas y en producción**.
 
 ---
 
 ## 🎯 Objetivo Actual: Completar el Planificador (Planner 5 vistas)
-El Planner debe reemplazar la vista simple actual con 5 perspectivas distintas, todas interconectadas. 
-Ya tenemos la **Vista Lista** (B.1) implementada y funcionando. 
-El siguiente paso es la **Vista Calendario** (B.4).
+El Planner tiene un selector de vista (📅 Anual / 🗓 Calendario) y las primeras dos vistas implementadas.
 
 ### 📊 Resumen de las 5 Vistas
 | Vista | Pregunta que responde | Estado |
 |---|---|---|
-| 📋 **Lista** (B.1) | ¿Qué viene ahora, en orden cronológico? | ✅ **Completado** (feed semanal, edición inline de fecha/estado, avatares). |
-| 🗺 **Calendario** (B.4) | ¿Qué hay el día X exactamente? | 🔴 **Pendiente (Prioridad 1)** |
-| 📊 **Gantt** (B.3) | ¿Hay choques de fechas? ¿Cómo se distribuye la carga? | 🔴 **Pendiente (Prioridad 2)** |
-| 🗂 **Kanban** (B.2) | ¿En qué etapa está cada cosa? | 🔴 **Pendiente (Prioridad 3)** |
-| 👥 **Carga de Equipo** (B.5) | ¿Quién está sobrecargado? ¿Quién tiene espacio? | ⚪ **Pendiente (Prioridad 4 - No urgente)** |
+| 📅 **Anual** (B.1) | ¿Qué hay cada mes a lo largo del año? | ✅ **Completado** (grilla por mes, shows + contenido, filtro por tipo). |
+| 🗓 **Calendario** (B.4) | ¿Qué hay el día X exactamente? | ✅ **Completado** (grilla mensual, navegación ← →, chips con tooltip, modal creación con fecha pre-cargada). |
+| 📊 **Gantt** (B.3) | ¿Hay choques de fechas? ¿Cómo se distribuye la carga? | 🔴 **Pendiente (Prioridad 1)** |
+| 🗂 **Kanban** (B.2) | ¿En qué etapa está cada cosa? | 🔴 **Pendiente (Prioridad 2)** |
+| 👥 **Carga de Equipo** (B.5) | ¿Quién está sobrecargado? ¿Quién tiene espacio? | ⚪ **Pendiente (Prioridad 3 - No urgente)** |
 
 ---
 
-## ⚡ Fase 1: B.4 — Calendario Mensual (Próximo Paso)
-### Descripción
-Grilla tipo Google Calendar (7 columnas × semanas del mes). Debe mostrar shows y contenido mezclados por día.
+## ✅ B.4 — Calendario Mensual (Completado)
+### Qué se implementó
+- Grilla 7 columnas × N semanas del mes generada dinámicamente.
+- Navegación ← → por mes + botón "Hoy" (aparece solo cuando no estás en el mes actual).
+- Chips por celda: nombre truncado a 18 chars + ícono de tipo, máx 3 visibles + overflow "+N más".
+- `title` nativo con nombre completo + equipo asignado (tooltip de hover).
+- Clic en chip show → `goToShow(idx)` / clic en chip contenido → `openCdDetail(id)`.
+- Clic en celda vacía → modal de creación con fecha pre-cargada, bifurca entre "Nuevo Show" y "Nueva Pieza".
+- Selector de vista en el header del Planner: tabs 📅 Anual / 🗓 Calendario, con estado persistente durante la sesión.
 
-### Requisitos Técnicos
-1.  **Prerrequisito (Extracción):** Mover la lógica de `groupByWeek` (actualmente dentro de `buildPlanner()` en `planner.js`) a una función global reutilizable en `app.js` o `planner.js`. Esto permitirá agrupar por semanas para otras vistas.
-2.  **Vista:**
-    *   Grilla con navegación por mes (← →) y botón "Hoy".
-    *   Cada celda contiene chips de los ítems de ese día (nombre truncado + ícono de tipo).
-    *   **Clic en chip:** Abre `openPanel(idx)` para shows o `openCdDetail(id)` para contenido.
-    *   **Clic en celda vacía:** Abre un modal para crear nuevo show/pieza con fecha pre-cargada.
-    *   **Tooltip/Hover:** Mostrar el equipo asignado (`equipoStackHTML`) al pasar el mouse sobre el chip.
-3.  **UI/UX:** No mostrar avatares dentro de la celda (por espacio); solo en el hover.
-
----
-
-## ⚡ Fase 2: B.3 — Gantt Unificado (Shows + Contenido)
-### Descripción
-Extender la vista Gantt actual (que solo muestra contenido) para que también incluya shows.
-
-### Requisitos Técnicos
-1.  **Adaptación de datos:** Generalizar `buildContenidoGantt()` para recibir un array mixto de shows y contenido.
-    *   **Shows:** Se representan como una barra de 1 día en la fecha del show (o marca puntual).
-    *   **Contenido:** Mantiene el doble tramo (Preproducción `fechaIdea→fechaInicio` + Producción `fechaInicio→fecha`).
-2.  **Agrupación:** Agrupar por show (para contenido) y tener un grupo separado para shows sin contenido asociado.
-3.  **Edición:** Soportar *drag & drop* de barras para modificar fechas (evaluar complejidad; si es muy costoso, implementar solo edición por clic en la barra que abre un input date).
-4.  **Zoom:** Reutilizar los sliders horizontales y verticales existentes (`_ganttDayWidth`, `_ganttRowHeight`).
+### Archivos modificados
+- `js/planner.js` — `groupByWeek()` extraída como función global; nuevas funciones `plSetView`, `_renderPlannerView`, `buildPlannerCalendario`, `calNavTo`, `calNavHoy`, `calCellClick`, `calOpenNewModal`, `calNuevoShow`, `calNuevoContenido`.
+- `js/app.js` — `nav()` y `enterApp()` actualizados para llamar `_renderPlannerView()` en lugar de `buildPlanner()` directamente.
+- `index.html` — agregado `#pl-view-tabs` con los dos botones de vista.
+- `css/app.css` — estilos para `.pl-view-tab`, `.cal-monthly-grid`, `.cal-cell`, `.cal-chip`, `.cal-chip-show`, `.cal-chip-content`, `.cal-chip-more`.
 
 ---
 
-## ⚡ Fase 3: B.2 — Kanban por Estado (Shows + Contenido)
+## ⚡ Fase 1: B.3 — Gantt Unificado (Shows + Contenido) — Próximo Paso
 ### Descripción
-Columnas = estados. Debe resolver el desafío de que shows y contenido tienen estados distintos.
-
-### Decisión de Diseño (a definir al implementar)
-Opción A: **Toggle** entre "Ver Shows" y "Ver Contenido" (dos modos separados).
-Opción B: **Doble fila de columnas** o **columnas divididas** (ej: columna "Confirmado" con una fila de shows y otra de contenido).
-Opción C: **Unificar estados** (mapear "Confirmado" → "Listo", "Tentativo" → "Idea", etc.) — *descartada por decisión previa, no mezclar estados.*
+Extender la vista Gantt actual (que solo muestra contenido) para que también incluya shows, accesible como tercer tab en el selector de vista del Planner.
 
 ### Requisitos Técnicos
-1.  **Drag & Drop:** Mover tarjetas entre columnas actualiza el estado en Supabase (`UPDATE` puntual).
-2.  **Cards:** Mostrar nombre, fecha y avatares del equipo.
-3.  **Clic:** Abre el detalle correspondiente (panel o ficha).
+1. **Adaptación de datos:** Generalizar `buildContenidoGantt()` para recibir un array mixto de shows y contenido.
+   - **Shows:** Barra puntual de 1 día en su fecha (con color por tipo/estado, igual que vista Anual).
+   - **Contenido:** Mantiene el doble tramo (Preproducción `fechaIdea→fechaInicio` + Producción `fechaInicio→fecha`).
+2. **Agrupación:** Agrupar contenido bajo su show asociado; grupo separado "Sin show" para contenido sin `showIdx`.
+3. **Edición:** Solo edición por clic en la barra → abre `input date` inline (drag & drop descartado por complejidad).
+4. **Zoom:** Reutilizar sliders existentes (`_ganttDayWidth`, `_ganttRowHeight`).
+5. **Integración:** Agregar tercer tab "📊 Gantt" al `#pl-view-tabs` en `index.html` y case en `_renderPlannerView()`.
 
 ---
 
-## ⚡ Fase 4: B.5 — Carga de Equipo (Heatmap)
+## ⚡ Fase 2: B.2 — Kanban por Estado (Shows + Contenido)
 ### Descripción
-Vista de planificación de dotación para evitar sobrecargas.
+Columnas = estados. Cuarto tab en el selector de vista del Planner.
+
+### Decisión de Diseño (pendiente de confirmar al implementar)
+- **Opción A (preferida):** Toggle "Ver Shows" / "Ver Contenido" dentro de la vista Kanban.
+- **Opción B:** Doble fila de columnas separadas por tipo.
+- *Opción C descartada: no mezclar estados entre shows y contenido.*
 
 ### Requisitos Técnicos
-1.  **Filas:** Personas del equipo (`PERSONAS`).
-2.  **Columnas:** Semanas o meses.
-3.  **Celdas:** Número de shows + piezas de contenido asignadas a esa persona en ese período.
-4.  **Color:** Heatmap (verde claro → rojo intenso) según la cantidad absoluta o relativa.
-5.  **Indicador:** Marcar semanas donde `viaja: true` en la asignación.
+1. **Drag & Drop:** Mover tarjetas entre columnas → `UPDATE` puntual en Supabase.
+2. **Cards:** Nombre, fecha, avatares del equipo (`equipoStackHTML`).
+3. **Clic:** Abre detalle correspondiente (`goToShow` / `openCdDetail`).
+
+---
+
+## ⚡ Fase 3: B.5 — Carga de Equipo (Heatmap)
+### Descripción
+Vista de planificación de dotación. Quinto tab en el selector.
+
+### Requisitos Técnicos
+1. **Filas:** Personas del equipo (`PERSONAS`).
+2. **Columnas:** Semanas o meses.
+3. **Celdas:** Cantidad de shows + piezas asignadas a esa persona en ese período.
+4. **Color:** Heatmap verde claro → rojo intenso.
+5. **Indicador:** Marcar semanas con `viaja: true` en la asignación.
 
 ---
 
 ## 🔧 Mejoras Transversales (Backlog Técnico)
-*   **Filtros del Planner:** Añadir filtros por **Estado** (multiselect) y **Rango de Fechas** a todas las vistas del Planner (actualmente solo existe filtro por Tipo).
-*   **Prerrequisito de Estructura:** Asegurar que `groupByWeek` esté extraída como función independiente antes de implementar B.4 (para no duplicar lógica).
-*   **Debt Técnica:** Eliminar `persistContenido()` (obsoleta) del código base cuando sea oportuno.
+- **Filtros del Planner:** Añadir filtros por **Estado** (multiselect) y **Rango de Fechas** a todas las vistas (actualmente solo existe filtro por tipo: todos/shows/contenido).
+- **Debt Técnica:** Eliminar `persistContenido()` (marcada como `OBSOLETA` en el código) cuando sea oportuno.
 
 ---
 
-## 📌 Nota sobre el Equipo
-La integración del equipo (avatares, `equipoStackHTML`) **ya está funcionando** en Shows, Contenido Digital y en la Vista Lista del Planner. 
-Cuando se implementen las nuevas vistas (Calendario, Gantt, Kanban), se debe reutilizar `equipoStackHTML` para mostrar a las personas asignadas (en cards o tooltips).- `function openPanel(idx)` y `function openCdDetail(id)` — puntos de entrada al detalle (clic en fila del Planner).
-- `saveCdCampo()` / `saveShows()` — sync Supabase, reutilizados por las funciones de edición inline del Planner.
-
----
-
-## Contraste planificacion.md vs index.html (22 jun 2026)
-
-### ✅ Coincidencias confirmadas
-- **A.1 Dashboard avatares** — `buildDash()` tiene `equipoStackHTML("show",s.id,3)` en columna Equipo. ✓
-- **A.2 Contenido Digital avatares** — `cdCardHTML()` y vista lista tienen avatares; `cdInfoHTML()` tiene `equipoAsignadoHTML`. ✓
-- **B.1 Planner Lista** — `buildPlanner()` implementa feed semanal con `weekKey`/`weekLabel`, edición inline via `plUpdateShowEst`, `plUpdateShowFecha`, `plUpdateCdEst`, `plUpdateCdFecha`, avatares `equipoStackHTML` en cada fila. ✓
-- **Funciones snapshot** — todas las listadas existen en el código: `buildPlanner`, `plUpdateShowEst/Fecha`, `plUpdateCdEst/Fecha`, `buildContenidoGantt`, `equipoStackHTML`, `openPanel`, `openCdDetail`, `saveCdCampo`, `saveShows`. ✓
-
-### ⚠️ Discrepancias menores
-- **`groupByWeek`** — el plan la describe como función reutilizable (~línea 4530); en el código está inlined dentro de `buildPlanner()`. No es problema funcional hoy, pero hay que extraerla antes de B.4.
-- **Filtros del Planner** — el plan especifica filtros de estado y rango de fechas. El código solo tiene filtro de tipo (`plFilter`: todos/shows/contenido). Pendiente.
-- **`persistContenido()`** — el plan dice "reemplazada"; el código la conserva marcada como `OBSOLETA`. Deuda técnica menor.
-- **A.3 Planner avatares** — B.1 los tiene. El ítem 7 del orden de implementación lo marca como gradual, lo cual es consistente.
-
-### 🔴 Próximo paso: B.4 Calendario mensual
-Lo que el plan pide y el código no tiene aún:
-- Grilla 7 columnas × semanas del mes
-- Chips de ítems por celda (shows + contenido) con nombre truncado + ícono de tipo
-- Navegación ← → por mes + botón "hoy"
-- Clic en chip → `openPanel(idx)` / `openCdDetail(id)`
-- Tooltips de equipo en hover de chip (no dentro de la celda)
-- Clic en celda vacía → modal "nuevo show/pieza en esta fecha"
-
-**Prerrequisito técnico:** extraer la lógica `groupByWeek` de `buildPlanner()` como función independiente, y agregar un cuarto tab en `#pl-filter-tabs` (o selector de vista tipo Contenido Digital) que llame a `buildPlannerCalendario()`. Esta función consumirá la misma data combinada que ya usa `buildPlanner()`.
+## 📌 Funciones clave del Planner (referencia para próximas vistas)
+- `_renderPlannerView()` — dispatcher central; llamar desde `nav()` y cualquier nueva vista.
+- `groupByWeek(items, getFecha)` — función global reutilizable para agrupar por semana.
+- `equipoStackHTML(entityType, entityId, max)` — avatares del equipo, disponible en `equipo.js`.
+- `goToShow(idx)` / `openCdDetail(id)` — puntos de entrada al detalle desde el Planner.
+- `buildContenidoGantt()` — en `contenido.js`, base para el Gantt unificado (B.3).
