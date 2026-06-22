@@ -24,6 +24,34 @@ function updateHeader(){
   },0);
   document.getElementById("d-ingr").textContent=fmtM(totalIngr);
 }
+// ── LANDING ──
+function enterAppFromLanding(){
+  // Landing "Entrar" just goes to login if not authenticated
+  if(!currentUser){
+    document.getElementById("landing").classList.add("exit");
+    setTimeout(()=>document.getElementById("landing").style.display="none",600);
+    return;
+  }
+  enterApp();
+}
+
+async function enterApp(){
+  const l=document.getElementById("landing");
+  if(l)l.style.display="none";
+  document.getElementById("app").style.display="flex";
+   SHOWS = await loadShows();
+  CONTENIDO = await loadContenido(); // carga después de SHOWS para tener el mapa showId→idx
+  PERSONAS = await loadPersonas();
+  ASIGNACIONES = await loadAsignaciones();
+  PERFILES_LITE = await loadPerfilesLite();
+  // Build all data-driven sections now that DOM is visible and user is known
+  buildShows();
+  buildDash();
+  buildRoadmapSelect();
+  buildPlanner();
+  updateHeader();
+  applyRoleRestrictions(); // also calls buildShows() + nav to first allowed section
+}
 
 // ── NAV ──
 const TITLES={dashboard:"Dashboard ejecutivo",coordinacion:"Coordinación de departamentos",shows:"Shows 2026",contenido:"Contenido digital",presupuesto:"Finanzas · reportes y consolidado",roadmap:"Hoja de ruta · día del show",planner:"Planner 2026",equipo:"Equipo de producción"};
