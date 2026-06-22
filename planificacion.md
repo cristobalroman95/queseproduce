@@ -1,5 +1,5 @@
 # Planificación — Avatares de Equipo en otras áreas + Planner modernizado
-*Última actualización: 22 jun 2026 — decisiones de diseño del Planner cerradas en conversación. Paso 9 (`persistContenido()`) resuelto.*
+*Última actualización: 22 jun 2026 — fix `persistContenido()`: alta y baja de piezas pasan a operaciones puntuales (`insertCdItem`/`deleteCdItem`). Patch: `paso-fix-persistcontenido-puntual.patch`. B.1 Planner Lista implementado: feed semanal con edición inline de estado y fecha para shows y contenido.*
 
 > Complementa a `migracion.md`. Pegar ambos al inicio de cada sesión que toque estas áreas, o pedir `git clone https://github.com/cristobalroman95/queseproduce.git`.
 
@@ -29,12 +29,8 @@
 
 ## Parte A — Avatares de Equipo en otras áreas
 
-### A.1 — Dashboard (sin bloqueos, hacer primero)
-Agregar columna "Equipo" en la tabla `dash-body` de `buildDash()`.
-- Agregar `<th>Equipo</th>` en el header de la tabla del dashboard (línea ~682 del HTML actual).
-- En cada fila de `buildDash()`: agregar `<td>${equipoStackHTML("show", s.id, 3)}</td>`.
-- Es copy-paste casi literal de la columna que ya existe en la tabla principal de Shows (línea ~1926).
-- **Sin bloqueos, 5 minutos de código.**
+### ~~A.1 — Dashboard~~ ✅ hecho
+Columna \"Equipo\" ya presente en `buildDash()` (confirmado en código, línea ~1953): `equipoStackHTML("show", s.id, 3)` en cada fila.
 
 ### A.2 — Contenido Digital (desbloqueada tras Paso 9)
 1. Agregar `equipoStackHTML("contenido", item.id, 3)` en `cdCardHTML(item)` (Kanban), en la vista Lista (nueva columna), y en el header de la Ficha de Pieza.
@@ -132,9 +128,9 @@ Señalar semanas de viaje (`viaja:true` en `asignaciones`).
 
 ## Orden de implementación definitivo
 
-1. **A.1** — Avatares en Dashboard. *(Hacer ahora, 5 min, sin bloqueos.)*
+1. ~~**A.1** — Avatares en Dashboard~~ ✅ hecho (confirmado en código, no era pendiente).
 2. ~~**A.2** — Avatares + Equipo asignado en Contenido Digital (cards, lista, ficha)~~ ✅ hecho (22 jun).
-3. **B.1** — Planner: vista Lista (reemplaza el actual, más simple de las 5).
+3. ~~**B.1** — Planner: vista Lista (reemplaza el actual, más simple de las 5)~~ ✅ hecho (22 jun) — feed semanal, `groupByWeek()` generalizada para shows+contenido, edición inline de estado y fecha con sync Supabase (`plUpdateShowEst`, `plUpdateShowFecha`, `plUpdateCdEst`, `plUpdateCdFecha`), avatares `equipoStackHTML` en cada fila.
 4. **B.4** — Planner: Calendario mensual (más útil del día a día junto con Lista).
 5. **B.3** — Planner: Gantt unificado shows + contenido.
 6. **B.2** — Planner: Kanban por estado (resolver diseño de estados mixtos al implementar).
@@ -145,17 +141,12 @@ Señalar semanas de viaje (`viaja:true` en `asignaciones`).
 
 ## Snapshot de funciones clave para cuando se retome sin acceso al repo
 
-**Para A.1:**
-- `function buildDash()` (~línea 1942) — agregar `<th>Equipo</th>` en el header y `equipoStackHTML("show", s.id, 3)` en cada fila.
-
-**Para A.2:**
-- `function cdCardHTML(item)` — agregar `equipoStackHTML("contenido", item.id, 3)`.
-- `function cdDetailTab()` / `cdInfoHTML()` — agregar `equipoAsignadoHTML("contenido", item.id, canEdit)`.
-
-**Para Parte B:**
-- `function buildPlanner()` (~línea 2968) — será reemplazada completa.
-- `function buildContenidoGantt()` — base del Gantt unificado.
-- `function groupByWeek(items)` — generalizar para aceptar shows + contenido.
-- `equipoStackHTML(entityType, entityId, max)` (~línea 5822) — usar en todas las vistas.
-- `function openPanel(idx)` y `function openCdDetail(id)` — los dos puntos de entrada al detalle desde el Planner.
-- `saveCdCampo()` / `saveShows()` — patrones de guardado puntual a reutilizar para edición inline.
+**Para Parte B (próximo: B.4 Calendario):**
+- `function buildPlanner()` (~línea 2969) — **reemplazada** por B.1 Lista. Feed semanal, edición inline con `plUpdateShowEst/Fecha` y `plUpdateCdEst/Fecha`.
+- `function plUpdateShowEst(realIdx,sel)` / `plUpdateShowFecha(realIdx,inp)` — edición inline de shows desde el Planner.
+- `function plUpdateCdEst(id,sel)` / `plUpdateCdFecha(id,inp)` — edición inline de contenido desde el Planner.
+- `function buildContenidoGantt()` — base del Gantt unificado (B.3).
+- `function groupByWeek(items)` (~línea 4530) — ahora usada también por el Planner (B.1 la llama indirectamente vía `weekKey`/`weekLabel`).
+- `equipoStackHTML(entityType, entityId, max)` (~línea 5865) — en cada fila del Planner Lista.
+- `function openPanel(idx)` y `function openCdDetail(id)` — puntos de entrada al detalle (clic en fila del Planner).
+- `saveCdCampo()` / `saveShows()` — sync Supabase, reutilizados por las funciones de edición inline del Planner.

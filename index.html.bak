@@ -396,31 +396,22 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .tss{border:none;background:transparent;font-size:10px;font-family:var(--font);cursor:pointer;padding:3px 5px;border-radius:4px;font-weight:600;width:88px;}
 
 /* ── PLANNER ── */
-/* ── PLANNER B.1 Lista ── */
-.pl-list-wrap{display:flex;flex-direction:column;gap:0;}
-.pl-week-group{}
-.pl-week-header{display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:1.5px solid var(--border-soft);margin-bottom:0;user-select:none;}
-.pl-week-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:#aaa;flex:1;}
-.pl-week-count{font-size:10px;color:#bbb;}
-.pl-row{display:grid;grid-template-columns:80px 1fr 110px 90px 72px;align-items:center;gap:10px;padding:7px 4px;border-bottom:0.5px solid var(--border-soft);cursor:pointer;transition:background 0.1s;}
-.pl-row:hover{background:var(--p50);}
-.pl-row-date{font-size:11px;color:#888;white-space:nowrap;}
-.pl-row-name{font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px;min-width:0;}
-.pl-row-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.pl-row-type-icon{font-size:13px;flex-shrink:0;}
-.pl-row-est{display:flex;align-items:center;}
-.pl-row-est select{border:none;background:transparent;font-size:10px;font-family:var(--font);cursor:pointer;padding:2px 4px;border-radius:4px;font-weight:600;width:100%;color:inherit;}
-.pl-row-fecha{display:flex;align-items:center;}
-.pl-row-fecha input[type=date]{border:none;background:transparent;font-size:10px;font-family:var(--font);cursor:pointer;color:#888;width:100%;}
-.pl-row-equipo{display:flex;align-items:center;justify-content:flex-end;}
-.pl-empty{padding:32px 0;text-align:center;font-size:11px;color:#bbb;font-style:italic;}
+.cal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.month-block{background:var(--surface);border-radius:10px;border:0.5px solid var(--border-soft);overflow:hidden;}
+.month-name{padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;background:var(--p900);color:#fff;}
+.month-shows{padding:6px;}
+.cal-show{padding:5px 7px;margin-bottom:4px;border-radius:5px;font-size:10px;cursor:pointer;transition:opacity 0.15s;}
+.cal-show:hover{opacity:0.75;}
+.cs-date{font-size:9px;opacity:0.65;margin-bottom:1px;}
+.cs-name{font-weight:600;line-height:1.3;}
 .pl-legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:12px;font-size:11px;color:#777;}
 .pl-leg-item{display:flex;align-items:center;gap:5px;}
 .pl-leg-dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
 .pl-leg-dot-content{background:linear-gradient(135deg,var(--p600),var(--a600));}
-/* compat: clases antiguas que puedan quedar referenciadas */
-.cal-grid{display:flex;flex-direction:column;}
-.month-block{}.month-name{}.month-shows{}.cal-show{}.cal-content{}.cc-meta{}.cc-name{}.cs-date{}.cs-name{}
+.cal-content{padding:5px 7px;margin-bottom:4px;border-radius:5px;font-size:10px;cursor:pointer;transition:opacity 0.15s;background:var(--p50);color:var(--p800);border-left:3px solid var(--p600);}
+.cal-content:hover{opacity:0.75;}
+.cc-meta{font-size:9px;opacity:0.7;margin-bottom:1px;display:flex;justify-content:space-between;gap:4px;}
+.cc-name{font-weight:600;line-height:1.3;}
 
 /* ── COORDINACIÓN ── */
 .coord-semaforo{width:11px;height:11px;border-radius:50%;display:inline-block;flex-shrink:0;}
@@ -842,7 +833,15 @@ body.edit-mode .edit-hint{display:block;opacity:1;transform:translateY(0);}
         <button class="filter-tab" onclick="plFilter('contenido',this)">🎬 Contenido digital</button>
       </div>
     </div>
-    <div id="planner-grid" class="pl-list-wrap"></div>
+    <div class="pl-legend">
+      <span class="pl-leg-item"><span class="pl-leg-dot" style="background:#085041"></span>Teatro</span>
+      <span class="pl-leg-item"><span class="pl-leg-dot" style="background:#712B13"></span>Teatro Especial</span>
+      <span class="pl-leg-item"><span class="pl-leg-dot" style="background:#3C3489"></span>Show Bar</span>
+      <span class="pl-leg-item"><span class="pl-leg-dot" style="background:#0C447C"></span>Digital / otro show</span>
+      <span class="pl-leg-item"><span class="pl-leg-dot" style="background:#633806"></span>Tentativo</span>
+      <span class="pl-leg-item" style="margin-left:10px;border-left:1px solid #e8e6e0;padding-left:10px;"><span class="pl-leg-dot pl-leg-dot-content"></span>Contenido digital</span>
+    </div>
+    <div class="cal-grid" id="planner-grid"></div>
   </div>
 
   <!-- ── EQUIPO ── -->
@@ -2968,137 +2967,43 @@ function plFilter(f,btn){
   buildPlanner();
 }
 function buildPlanner(){
-  const wrap=document.getElementById("planner-grid");
-  if(!wrap)return;
+  const grid=document.getElementById("planner-grid");
   const showFilter=plActiveFilter==='todos'||plActiveFilter==='shows';
   const contFilter=plActiveFilter==='todos'||plActiveFilter==='contenido';
-
-  // Armar lista combinada con tipo
-  const combined=[];
-  if(showFilter){
-    SHOWS.forEach((s,realIdx)=>{
-      if(!s.fecha)return;
-      combined.push({type:'show',fecha:s.fecha,data:{s,realIdx}});
-    });
-  }
-  if(contFilter){
-    (typeof CONTENIDO!=='undefined'?CONTENIDO:[]).forEach(c=>{
-      if(!c.fecha)return;
-      combined.push({type:'contenido',fecha:c.fecha,data:c});
-    });
-  }
-  // Ordenar cronológico
-  combined.sort((a,b)=>a.fecha.localeCompare(b.fecha));
-
-  if(!combined.length){
-    wrap.innerHTML=`<div class="pl-empty">No hay ítems para mostrar con este filtro.</div>`;
-    return;
-  }
-
-  // Agrupar por semana
-  const weeks={};
-  const weekOrder=[];
-  combined.forEach(entry=>{
-    const d=new Date(entry.fecha+'T12:00:00');
-    const key=weekKey(d);
-    if(!weeks[key]){
-      weeks[key]={label:weekLabel(d),items:[]};
-      weekOrder.push(key);
-    }
-    weeks[key].items.push(entry);
-  });
-
-  // Estados de shows (para select inline)
-  const SHOW_ESTADOS=['Confirmado','Tentativo','En proceso','Realizado','Cancelado'];
-  const CD_ESTADOS=['Idea','En producción','Listo para publicar','Publicado'];
-
-  const canEdit=currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit;
-
-  const rowHTML=(entry)=>{
-    if(entry.type==='show'){
-      const {s,realIdx}=entry.data;
-      const c=showColor(s.tipo,s.estado);
-      const fechaFmt=fmtDate(s.fecha);
-      const estOpts=SHOW_ESTADOS.map(e=>`<option value="${e}"${s.estado===e?' selected':''}>${estEmoji(e)} ${e}</option>`).join('');
-      const estSel=canEdit
-        ?`<select class="tss ${estC(s.estado)}" onclick="event.stopPropagation()" onchange="plUpdateShowEst(${realIdx},this)">${estOpts}</select>`
-        :`<span style="font-size:10px;font-weight:600;">${estEmoji(s.estado)} ${s.estado}</span>`;
-      const fechaInput=canEdit
-        ?`<input type="date" value="${s.fecha||''}" onclick="event.stopPropagation()" onchange="plUpdateShowFecha(${realIdx},this)" title="Cambiar fecha">`
-        :`<span style="font-size:10px;color:#888;">${fechaFmt}</span>`;
-      return`<div class="pl-row" onclick="goToShow(${realIdx})" title="${s.nombre}">
-        <div class="pl-row-date">${fechaFmt}</div>
-        <div class="pl-row-name"><span class="pl-row-type-icon">🎤</span><span>${s.nombre}</span></div>
-        <div class="pl-row-est">${estSel}</div>
-        <div class="pl-row-fecha">${fechaInput}</div>
-        <div class="pl-row-equipo">${equipoStackHTML('show',s.id,3)}</div>
-      </div>`;
-    } else {
-      const item=entry.data;
-      const fechaFmt=fmtDate(item.fecha);
-      const estOpts=CD_ESTADOS.map(e=>`<option value="${e}"${item.estado===e?' selected':''}>${cdEstEmoji(e)} ${e}</option>`).join('');
-      const estSel=canEdit
-        ?`<select class="tss" style="color:var(--p700)" onclick="event.stopPropagation()" onchange="plUpdateCdEst('${item.id}',this)">${estOpts}</select>`
-        :`<span style="font-size:10px;font-weight:600;">${cdEstEmoji(item.estado)} ${item.estado}</span>`;
-      const fechaInput=canEdit
-        ?`<input type="date" value="${item.fecha||''}" onclick="event.stopPropagation()" onchange="plUpdateCdFecha('${item.id}',this)" title="Cambiar fecha">`
-        :`<span style="font-size:10px;color:#888;">${fechaFmt}</span>`;
-      return`<div class="pl-row" onclick="openCdDetail('${item.id}')" title="${item.nombre}">
-        <div class="pl-row-date">${fechaFmt}</div>
-        <div class="pl-row-name"><span class="pl-row-type-icon">🎬</span><span>${item.nombre}</span></div>
-        <div class="pl-row-est">${estSel}</div>
-        <div class="pl-row-fecha">${fechaInput}</div>
-        <div class="pl-row-equipo">${equipoStackHTML('contenido',item.id,3)}</div>
-      </div>`;
-    }
-  };
-
-  wrap.innerHTML=weekOrder.map(key=>{
-    const {label,items}=weeks[key];
-    return`<div class="pl-week-group">
-      <div class="pl-week-header">
-        <span class="pl-week-label">${label}</span>
-        <span class="pl-week-count">${items.length} ítem${items.length!==1?'s':''}</span>
-      </div>
-      ${items.map(rowHTML).join('')}
-    </div>`;
-  }).join('');
-}
-
-// Edición inline desde el Planner — Shows
-async function plUpdateShowEst(realIdx,sel){
-  const raw=sel.value.replace(/[✅⏳🔄❌🎉]\s*/,'');
-  SHOWS[realIdx].estado=raw;
-  sel.className='tss '+estC(raw);
-  await saveShows();
-  updateHeader();buildDash();
-  toast('Estado → '+estEmoji(raw)+' '+raw);
-}
-async function plUpdateShowFecha(realIdx,inp){
-  if(!inp.value)return;
-  SHOWS[realIdx].fecha=inp.value;
-  await saveShows();
-  buildPlanner();
-  toast('Fecha actualizada');
-}
-
-// Edición inline desde el Planner — Contenido Digital
-async function plUpdateCdEst(id,sel){
-  const newEst=sel.value;
-  const idx=CONTENIDO.findIndex(c=>c.id===id);
-  if(idx<0)return;
-  CONTENIDO[idx].estado=newEst;
-  await saveCdCampo(id,'estado',newEst);
-  toast('Estado → '+cdEstEmoji(newEst)+' '+newEst);
-}
-async function plUpdateCdFecha(id,inp){
-  if(!inp.value)return;
-  const idx=CONTENIDO.findIndex(c=>c.id===id);
-  if(idx<0)return;
-  CONTENIDO[idx].fecha=inp.value;
-  await saveCdCampo(id,'fecha',inp.value);
-  buildPlanner();
-  toast('Fecha actualizada');
+  grid.innerHTML=MESES.map((mes,mi)=>{
+    const mShows=showFilter?SHOWS.map((s,realIdx)=>({s,realIdx})).filter(o=>{
+      if(!o.s.fecha)return false;
+      return parseInt(o.s.fecha.split("-")[1])===mi+1;
+    }):[];
+    const mCont=contFilter?(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).filter(c=>{
+      if(!c.fecha)return false;
+      return parseInt(c.fecha.split("-")[1])===mi+1;
+    }):[];
+    // Combine and sort by day
+    const combined=[
+      ...mShows.map(o=>({type:'show',day:parseInt(o.s.fecha.split("-")[2]),data:o})),
+      ...mCont.map(c=>({type:'content',day:parseInt(c.fecha.split("-")[2]),data:c})),
+    ].sort((a,b)=>a.day-b.day);
+    const inner=combined.length?combined.map(entry=>{
+      if(entry.type==='show'){
+        const {s,realIdx}=entry.data;
+        const c=showColor(s.tipo,s.estado);
+        const dia=s.fecha?s.fecha.split("-")[2]:"??";
+        return`<div class="cal-show" style="background:${c.bg};color:${c.txt}" onclick="goToShow(${realIdx})" title="Ver ${s.nombre.replace(/"/g,'&quot;')}">
+          <div class="cs-date">🎤 Día ${dia}</div>
+          <div class="cs-name">${s.nombre}</div>
+        </div>`;
+      } else {
+        const item=entry.data;
+        const dia=item.fecha?item.fecha.split("-")[2]:"??";
+        return`<div class="cal-content" onclick="openCdDetail('${item.id}')" title="Ver ${item.nombre.replace(/"/g,'&quot;')}">
+          <div class="cc-meta"><span>🎬 Día ${dia}</span><span>${cdEstEmoji(item.estado)}</span></div>
+          <div class="cc-name">${item.nombre}</div>
+        </div>`;
+      }
+    }).join(""):`<div style="padding:10px 8px;font-size:10px;color:#ddd;font-style:italic;">Sin eventos</div>`;
+    return`<div class="month-block"><div class="month-name">${mes}</div><div class="month-shows">${inner}</div></div>`;
+  }).join("");
 }
 
 // ── COORDINACIÓN DE DEPARTAMENTOS ──
