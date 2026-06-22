@@ -133,7 +133,7 @@ Señalar semanas de viaje (`viaja:true` en `asignaciones`).
 ## Orden de implementación definitivo
 
 1. **A.1** — Avatares en Dashboard. *(Hacer ahora, 5 min, sin bloqueos.)*
-2. **A.2** — Avatares + Equipo asignado en Contenido Digital (cards, lista, ficha).
+2. ~~**A.2** — Avatares + Equipo asignado en Contenido Digital (cards, lista, ficha)~~ ✅ hecho (22 jun).
 3. **B.1** — Planner: vista Lista (reemplaza el actual, más simple de las 5).
 4. **B.4** — Planner: Calendario mensual (más útil del día a día junto con Lista).
 5. **B.3** — Planner: Gantt unificado shows + contenido.

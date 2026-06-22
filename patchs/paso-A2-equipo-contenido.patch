@@ -1,0 +1,65 @@
+diff --git a/index.html b/index.html
+index 84a3f31..8e54d8a 100644
+--- a/index.html
++++ b/index.html
+@@ -4885,12 +4885,13 @@ function buildContenido(){
+         <td>${item.responsable}</td>
+         <td>${show?`<span style="font-size:10px;color:var(--p600);cursor:pointer;" onclick="event.stopPropagation();goToShowDetailFull(${item.showIdx},'cdshow')">↗ ${show.nombre}</span>`:'—'}</td>
+         <td><span class="cd-est-pill ${cdEstClass(item.estado)}">${cdEstEmoji(item.estado)} ${item.estado}</span></td>
++        <td>${equipoStackHTML("contenido",item.id,3)}</td>
+         <td><button class="btn" style="font-size:10px;padding:3px 8px;" onclick="event.stopPropagation();deleteCd('${item.id}')">✕</button></td>
+       </tr>`;
+     }).join('');
+     body.innerHTML=statsHTML+`<div class="card" style="padding:0;overflow:hidden;">
+       <table class="cd-list-tbl">
+-        <thead><tr><th style="padding-left:14px">Pieza</th><th>Tipo</th><th>Plataforma</th><th>Fecha</th><th>Responsable</th><th>Show vinculado</th><th>Estado</th><th></th></tr></thead>
++        <thead><tr><th style="padding-left:14px">Pieza</th><th>Tipo</th><th>Plataforma</th><th>Fecha</th><th>Responsable</th><th>Show vinculado</th><th>Estado</th><th>Equipo</th><th></th></tr></thead>
+         <tbody>${rows}</tbody>
+       </table>
+     </div>`;
+@@ -4915,6 +4916,7 @@ function cdCardHTML(item){
+       ${urlLink}
+     </div>
+     ${show?`<div class="cd-card-show" onclick="event.stopPropagation();goToShowDetailFull(${item.showIdx},'cdshow')" style="cursor:pointer;">↗ ${show.nombre}</div>`:''}
++    <div style="margin-top:6px;">${equipoStackHTML("contenido",item.id,3)}</div>
+   </div>`;
+ }
+ 
+@@ -5564,6 +5566,7 @@ function cdInfoHTML(item){
+       ${textField('URL publicado (si ya salió)','url',item.url,'https://...')}
+       ${textareaField('Notas / brief / referencias','notas',item.notas,'Contexto, referencias visuales, indicaciones...')}
+     </div>
++    <div style="margin-top:20px;" id="cd-equipo-asignado-${id}">${equipoAsignadoHTML("contenido",id,!!(currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit))}</div>
+     <p style="font-size:10px;color:#bbb;margin-top:12px;">Todos los campos se guardan automáticamente al hacer clic afuera o cambiar el valor.</p>`;
+ }
+ 
+@@ -5960,7 +5963,15 @@ function updateEquipoField(entityType,entityId,personaId,field,value){
+   if(item)item[field]=value;
+ }
+ function rerenderEquipoAsignado(entityType,entityId){
+-  if(entityType!=="show")return;
++  if(entityType==="contenido"){
++    const el=document.getElementById(`cd-equipo-asignado-${entityId}`);
++    if(el){
++      const item=CONTENIDO.find(c=>String(c.id)===String(entityId));
++      if(item)el.innerHTML=equipoAsignadoHTML("contenido",entityId,!!(currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit));
++    }
++    buildContenido(); // refresca avatares en kanban/lista
++    return;
++  }
+   if(fullDetailIdx!==null&&fullDetailActiveTab==="equipo"&&String(SHOWS[fullDetailIdx]?.id)===String(entityId)){
+     renderFullDetailIfOpen();
+   }
+diff --git a/planificacion.md b/planificacion.md
+index 4b15246..55a033b 100644
+--- a/planificacion.md
++++ b/planificacion.md
+@@ -133,7 +133,7 @@ Señalar semanas de viaje (`viaja:true` en `asignaciones`).
+ ## Orden de implementación definitivo
+ 
+ 1. **A.1** — Avatares en Dashboard. *(Hacer ahora, 5 min, sin bloqueos.)*
+-2. **A.2** — Avatares + Equipo asignado en Contenido Digital (cards, lista, ficha).
++2. ~~**A.2** — Avatares + Equipo asignado en Contenido Digital (cards, lista, ficha)~~ ✅ hecho (22 jun).
+ 3. **B.1** — Planner: vista Lista (reemplaza el actual, más simple de las 5).
+ 4. **B.4** — Planner: Calendario mensual (más útil del día a día junto con Lista).
+ 5. **B.3** — Planner: Gantt unificado shows + contenido.
