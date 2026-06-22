@@ -301,3 +301,21 @@ function defaultPresupuesto(tipo){
     ]},
   ]};
 }
+// Convierte una fila de la tabla ficha_tecnica al formato que usa el front (camelCase + contactoVenue anidado)
+function fichaRowToFront(row){
+  if(!row)return null;
+  return{
+    sonido:row.sonido||"",
+    luces:row.luces||"",
+    backline:row.backline||"",
+    video:row.video||"",
+    catering:row.catering||"",
+    riderArtista:row.rider_artista||"",
+    notasLibres:row.notas_libres||"",
+    contactoVenue:{
+      nombre:row.contacto_nombre||"",
+      telefono:row.contacto_telefono||"",
+      rol:row.contacto_rol||"",
+    },
+  };
+}

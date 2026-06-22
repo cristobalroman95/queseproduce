@@ -554,24 +554,16 @@
 
 <script>
 
-// Convierte una fila de la tabla ficha_tecnica al formato que usa el front (camelCase + contactoVenue anidado)
-function fichaRowToFront(row){
-  if(!row)return null;
-  return{
-    sonido:row.sonido||"",
-    luces:row.luces||"",
-    backline:row.backline||"",
-    video:row.video||"",
-    catering:row.catering||"",
-    riderArtista:row.rider_artista||"",
-    notasLibres:row.notas_libres||"",
-    contactoVenue:{
-      nombre:row.contacto_nombre||"",
-      telefono:row.contacto_telefono||"",
-      rol:row.contacto_rol||"",
-    },
-  };
+function loadPresets(){
+  try{const s=localStorage.getItem('qp_presets');return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULT_PRESETS_ROADMAP));}catch(e){return JSON.parse(JSON.stringify(DEFAULT_PRESETS_ROADMAP));}
 }
+function savePresets(){try{localStorage.setItem('qp_presets',JSON.stringify(PRESETS_ROADMAP));}catch(e){}}
+
+let PRESETS_ROADMAP = loadPresets();
+let SHOWS = [];
+let editingIdx = null;
+let activeShowIdx = null; // show actualmente abierto en la vista de detalle completo
+let panelActiveTab = "ficha"; // tab activo dentro del panel flotante
 
 async function loadShows(){
   try{
@@ -680,43 +672,6 @@ const invitadosByShowId={};
     return [];
   }
 }
-function loadPresets(){
-  try{const s=localStorage.getItem('qp_presets');return s?JSON.parse(s):JSON.parse(JSON.stringify(DEFAULT_PRESETS_ROADMAP));}catch(e){return JSON.parse(JSON.stringify(DEFAULT_PRESETS_ROADMAP));}
-}
-function savePresets(){try{localStorage.setItem('qp_presets',JSON.stringify(PRESETS_ROADMAP));}catch(e){}}
-
-let PRESETS_ROADMAP = loadPresets();
-let SHOWS = [];
-let editingIdx = null;
-let activeShowIdx = null; // show actualmente abierto en la vista de detalle completo
-let panelActiveTab = "ficha"; // tab activo dentro del panel flotante
-
-// ── HELPERS ──
-function fmtDate(d){if(!d)return"—";const p=d.split("-");return p[2]+"/"+p[1]+"/"+p[0];}
-function fmtM(n){if(!n||n===0)return"—";return"$"+Math.round(n/1000000*10)/10+"M";}
-function fmtCLP(n){if(!n&&n!==0)return"—";return"$"+n.toLocaleString("es-CL");}
-function tipoC(t){if(t==="Teatro")return"tp-teatro";if(t==="Teatro Especial")return"tp-especial";if(t==="Show Bar")return"tp-bar";return"tp-digital";}
-function estC(e){if(e==="Confirmado")return"ss-conf";if(e==="Tentativo")return"ss-tent";if(e==="En proceso")return"ss-proc";if(e==="Realizado")return"ss-real";return"ss-canc";}
-function estEmoji(e){if(e==="Confirmado")return"✅";if(e==="Tentativo")return"⏳";if(e==="En proceso")return"🔄";if(e==="Realizado")return"🎉";return"❌";}
-function tskC(e){if(e==="Listo")return"color:var(--t600);background:var(--t50);";if(e==="En curso")return"color:var(--b600);background:var(--b50);";if(e==="Cancelado")return"color:var(--r600);background:var(--r50);";return"color:#888;background:var(--g50);";}
-function ingr(s){return Math.round(s.aforo*s.obj)*s.ticket;}
-function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
-function updateHeader(){
-  const conf=SHOWS.filter(s=>s.estado==="Confirmado").length;
-  const tent=SHOWS.filter(s=>s.estado==="Tentativo").length;
-  const real=SHOWS.filter(s=>s.estado==="Realizado").length;
-  document.getElementById("hdr-conf").textContent="✅ "+conf+" confirmados";
-  document.getElementById("hdr-tent").textContent="⏳ "+tent+" tentativos";
-  document.getElementById("d-conf").textContent=conf;
-  document.getElementById("d-tent").textContent=tent;
-  // Ingresos estimados: suma Confirmados futuros + Realizados (entradas vendidas reales si las hay)
-  const totalIngr=SHOWS.filter(s=>s.estado==="Confirmado"||s.estado==="Realizado").reduce((a,s)=>{
-    const v=s.vendidas!=null?s.vendidas*s.ticket:ingr(s);
-    return a+v;
-  },0);
-  document.getElementById("d-ingr").textContent=fmtM(totalIngr);
-}
-
 // ── EVENTOS CLICKEABLES: ir directo a un show desde cualquier parte ──
 function goToShow(idx){
   const navItem=Array.from(document.querySelectorAll('.nav-item')).find(n=>n.getAttribute('onclick')&&n.getAttribute('onclick').includes("nav('shows'"));
@@ -843,23 +798,6 @@ function resetShowsData(){
   toast('🔄 Datos reseteados — recargando...');
   setTimeout(()=>location.reload(),700);
 }
-
-
-// ── AUTH SYSTEM ──
-const ROLE_DEFS={
-  // ⚠️ TEMPORAL: "invitado" es el rol que se asigna automáticamente a cualquiera que entre con Google
-  // por primera vez (ver trigger en Supabase). Hoy tiene visión completa, igual que "programador",
-  // a propósito — decisión tomada el 20-jun-2026 mientras se valida el alta por Google.
-  // Ajustar acá (o directamente el campo `rol` en la tabla `perfiles`) cuando se quiera restringir.
-  invitado:{label:"Invitado",icon:"👋",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
-  programador:{label:"Programador",icon:"⬛",color:"#1a1a18",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
-  productor:{label:"Productor",icon:"🎬",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
-  artista:{label:"Artista",icon:"🎤",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
-  contador:{label:"Contador",icon:"📊",color:"var(--t600)",sections:["dashboard","presupuesto","shows"],canEdit:false,showFinancials:true},
-  tecnico:{label:"Técnico",icon:"🔧",color:"var(--b600)",sections:["shows"],canEdit:false,showFinancials:false,showTabs:["resumen","ficha","equipo","bitacora","roadmap","multimedia"]},
-  marketing:{label:"Marketing",icon:"📣",color:"var(--a600)",sections:["dashboard","shows","contenido","planner"],canEdit:false,showFinancials:false}
-};
-
 // Tabs disponibles dentro del detalle de un show ("Info","Ficha técnica","Hoja de ruta","Presupuesto","Invitados","Cierre").
 // Si el rol no define showTabs, tiene acceso a todas. El Técnico queda limitado a ficha técnica + hoja de ruta — nunca a valores monetarios.
 function getAllowedShowTabs(){
@@ -880,53 +818,6 @@ function applyShowTabVisibility(){
 
 
 
-// ── LANDING ──
-function enterAppFromLanding(){
-  // Landing "Entrar" just goes to login if not authenticated
-  if(!currentUser){
-    document.getElementById("landing").classList.add("exit");
-    setTimeout(()=>document.getElementById("landing").style.display="none",600);
-    return;
-  }
-  enterApp();
-}
-
-async function enterApp(){
-  const l=document.getElementById("landing");
-  if(l)l.style.display="none";
-  document.getElementById("app").style.display="flex";
-   SHOWS = await loadShows();
-  CONTENIDO = await loadContenido(); // carga después de SHOWS para tener el mapa showId→idx
-  PERSONAS = await loadPersonas();
-  ASIGNACIONES = await loadAsignaciones();
-  PERFILES_LITE = await loadPerfilesLite();
-  // Build all data-driven sections now that DOM is visible and user is known
-  buildShows();
-  buildDash();
-  buildRoadmapSelect();
-  buildPlanner();
-  updateHeader();
-  applyRoleRestrictions(); // also calls buildShows() + nav to first allowed section
-}
-
-// ── NAV ──
-const TITLES={dashboard:"Dashboard ejecutivo",coordinacion:"Coordinación de departamentos",shows:"Shows 2026",contenido:"Contenido digital",presupuesto:"Finanzas · reportes y consolidado",roadmap:"Hoja de ruta · día del show",planner:"Planner 2026",equipo:"Equipo de producción"};
-function nav(id,el){
-  document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
-  document.querySelectorAll(".nav-item").forEach(n=>n.classList.remove("active"));
-  const sec=document.getElementById("sec-"+id);
-  if(sec)sec.classList.add("active");
-  if(el)el.classList.add("active");
-  document.getElementById("topbar-title").textContent=TITLES[id]||id;
-  if(id==="dashboard"){buildDash();updateHeader();}
-  if(id==="coordinacion")buildCoordinacion();
-  if(id==="shows")buildShows();
-  if(id==="roadmap")buildRoadmapSelect();
-  if(id==="planner")buildPlanner();
-  if(id==="presupuesto")buildPresupConsolidado();
-  if(id==="contenido")buildContenido();
-  if(id==="equipo")buildEquipo();
-}
 
 // ── SHOWS TABLE ──
 function buildShows(){

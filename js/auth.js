@@ -1,5 +1,21 @@
 let currentUser=null;
 
+// ── AUTH SYSTEM ──
+const ROLE_DEFS={
+  // ⚠️ TEMPORAL: "invitado" es el rol que se asigna automáticamente a cualquiera que entre con Google
+  // por primera vez (ver trigger en Supabase). Hoy tiene visión completa, igual que "programador",
+  // a propósito — decisión tomada el 20-jun-2026 mientras se valida el alta por Google.
+  // Ajustar acá (o directamente el campo `rol` en la tabla `perfiles`) cuando se quiera restringir.
+  invitado:{label:"Invitado",icon:"👋",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+  programador:{label:"Programador",icon:"⬛",color:"#1a1a18",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+  productor:{label:"Productor",icon:"🎬",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+  artista:{label:"Artista",icon:"🎤",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+  contador:{label:"Contador",icon:"📊",color:"var(--t600)",sections:["dashboard","presupuesto","shows"],canEdit:false,showFinancials:true},
+  tecnico:{label:"Técnico",icon:"🔧",color:"var(--b600)",sections:["shows"],canEdit:false,showFinancials:false,showTabs:["resumen","ficha","equipo","bitacora","roadmap","multimedia"]},
+  marketing:{label:"Marketing",icon:"📣",color:"var(--a600)",sections:["dashboard","shows","contenido","planner"],canEdit:false,showFinancials:false}
+};
+
+
 async function loginWithGoogle(){
   const err=document.getElementById("login-error");
   const statusErr=document.getElementById("login-status-error");
