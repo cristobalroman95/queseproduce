@@ -118,7 +118,7 @@ function nav(id,el){
   if(id==="coordinacion")buildCoordinacion();
   if(id==="shows")buildShows();
   if(id==="roadmap")buildRoadmapSelect();
-  if(id==="planner")buildPlanner();
+  if(id==="planner")_renderPlannerView();
   if(id==="presupuesto")buildPresupConsolidado();
   if(id==="contenido")buildContenido();
   if(id==="equipo")buildEquipo();
@@ -151,7 +151,7 @@ async function enterApp(){
   buildShows();
   buildDash();
   buildRoadmapSelect();
-  buildPlanner();
+  _renderPlannerView();
   updateHeader();
   applyRoleRestrictions();
 }

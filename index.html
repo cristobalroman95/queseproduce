@@ -278,7 +278,11 @@
 
   <!-- ── PLANNER ── -->
   <div id="sec-planner" class="section">
-    <div class="shows-header">
+    <div class="shows-header" style="flex-wrap:wrap;gap:8px;">
+      <div class="pl-view-tabs" id="pl-view-tabs">
+        <button class="pl-view-tab active" onclick="plSetView('anual',this)">📅 Anual</button>
+        <button class="pl-view-tab" onclick="plSetView('calendario',this)">🗓 Calendario</button>
+      </div>
       <div class="filter-tabs" id="pl-filter-tabs">
         <button class="filter-tab active" onclick="plFilter('todos',this)">Todos</button>
         <button class="filter-tab" onclick="plFilter('shows',this)">🎤 Shows / eventos</button>

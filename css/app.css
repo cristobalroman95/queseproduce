@@ -408,8 +408,42 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .pl-leg-dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
 .pl-leg-dot-content{background:linear-gradient(135deg,var(--p600),var(--a600));}
 /* compat: clases antiguas que puedan quedar referenciadas */
+/* ── PLANNER: selector de vista ── */
+.pl-view-tabs{display:flex;gap:6px;}
+.pl-view-tab{padding:5px 14px;border-radius:20px;border:0.5px solid var(--border-soft);background:transparent;color:#9690C2;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;}
+.pl-view-tab.active{background:var(--p400);color:#fff;border-color:var(--p400);}
+.pl-view-tab:hover:not(.active){background:var(--g100);}
+
+/* ── VISTA ANUAL (original) ── */
 .cal-grid{display:flex;flex-direction:column;}
 .month-block{}.month-name{}.month-shows{}.cal-show{}.cal-content{}.cc-meta{}.cc-name{}.cs-date{}.cs-name{}
+
+/* ── VISTA CALENDARIO MENSUAL (B.4) ── */
+.cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.cal-nav-btn{background:var(--g100);border:0.5px solid var(--border-soft);color:#E4E1F7;border-radius:8px;padding:5px 13px;font-size:15px;cursor:pointer;font-family:var(--font);transition:background .15s;}
+.cal-nav-btn:hover{background:var(--g200);}
+.cal-nav-title{font-size:15px;font-weight:700;color:#E4E1F7;flex:1;text-align:center;letter-spacing:.3px;}
+.cal-nav-hoy{padding:4px 12px;border-radius:12px;border:0.5px solid var(--p200);background:transparent;color:var(--p200);font-size:11px;cursor:pointer;font-family:var(--font);transition:all .15s;}
+.cal-nav-hoy:hover{background:var(--p400);color:#fff;border-color:var(--p400);}
+.cal-monthly-grid{width:100%;}
+.cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;}
+.cal-dow{text-align:center;font-size:10px;font-weight:700;color:#9690C2;padding:4px 0;text-transform:uppercase;letter-spacing:.5px;}
+.cal-cells{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-cell{min-height:90px;background:var(--surface);border:0.5px solid var(--border-soft);border-radius:8px;padding:6px 6px 4px;cursor:pointer;transition:background .12s;overflow:hidden;position:relative;}
+.cal-cell:hover{background:var(--g100);}
+.cal-cell-empty{background:transparent;border-color:transparent;cursor:default;min-height:90px;}
+.cal-cell-empty:hover{background:transparent;}
+.cal-cell-today{border-color:var(--p400);background:rgba(108,92,231,0.08);}
+.cal-cell-today:hover{background:rgba(108,92,231,0.14);}
+.cal-cell-num{font-size:11px;font-weight:600;color:#9690C2;line-height:1;margin-bottom:5px;}
+.cal-cell-num-today{color:var(--p200);font-size:12px;}
+.cal-cell-chips{display:flex;flex-direction:column;gap:2px;}
+.cal-chip{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:opacity .12s;line-height:1.5;}
+.cal-chip:hover{opacity:.8;}
+.cal-chip-show{background:rgba(225,245,238,.18);color:#9FE1CB;border-left:2px solid #1D9E75;}
+.cal-chip-content{background:rgba(108,92,231,.18);color:#A9A0F0;border-left:2px solid var(--p400);}
+.cal-chip-more{font-size:10px;color:#9690C2;cursor:pointer;padding:1px 4px;margin-top:1px;}
+.cal-chip-more:hover{color:var(--p200);}
 
 /* ── COORDINACIÓN ── */
 .coord-semaforo{width:11px;height:11px;border-radius:50%;display:inline-block;flex-shrink:0;}
