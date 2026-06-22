@@ -1,5 +1,5 @@
 # Planificación — Avatares de Equipo en otras áreas + Planner modernizado
-*Última actualización: 22 jun 2026 — fix `persistContenido()`: alta y baja de piezas pasan a operaciones puntuales (`insertCdItem`/`deleteCdItem`). Patch: `paso-fix-persistcontenido-puntual.patch`. B.1 Planner Lista implementado: feed semanal con edición inline de estado y fecha para shows y contenido.*
+*Última actualización: 22 jun 2026 — fix `persistContenido()`: alta y baja de piezas pasan a operaciones puntuales (`insertCdItem`/`deleteCdItem`). Patch: `paso-fix-persistcontenido-puntual.patch`. B.1 Planner Lista implementado: feed semanal con edición inline de estado y fecha para shows y contenido. Contraste `planificacion.md` vs `index.html` completado — código alineado con el plan; discrepancias menores documentadas abajo.*
 
 > Complementa a `migracion.md`. Pegar ambos al inicio de cada sesión que toque estas áreas, o pedir `git clone https://github.com/cristobalroman95/queseproduce.git`.
 
@@ -8,9 +8,11 @@
 ## Contexto (estado real del código al 22 jun 2026)
 - **Equipo funciona:** `personas` + `asignaciones` en Supabase. `equipoStackHTML(entityType, entityId, max)` usada en tabla de Shows y pestaña "👥 Equipo" del detalle de show.
 - **Contenido Digital tiene 3 vistas:** Kanban (por semana), Gantt, Lista. Base técnica a reutilizar para el Planner.
-- **Planner actual (`buildPlanner()`):** 12 bloques de mes, lista shows + contenido sin celdas por día, filtro básico. **Será reemplazado completo** — no convive, el nuevo lo sustituye directo.
-- **Dashboard (`buildDash()`):** tabla de shows sin columna Equipo todavía (A.1 pendiente).
-- **~~Bloqueo Paso 9~~:** ✅ resuelto (22 jun) — `persistContenido()` reemplazada por `insertCdItem()`/`deleteCdItem()`. Los ids de `contenido_digital` ya son estables. A.2 desbloqueada.
+- **Planner actual (`buildPlanner()`):** ~~12 bloques de mes, lista shows + contenido sin celdas por día, filtro básico~~ → **reemplazado** por B.1 Lista. Feed semanal, edición inline, avatares. Próxima vista: B.4 Calendario.
+- **Dashboard (`buildDash()`):** ~~tabla de shows sin columna Equipo~~ → columna Equipo presente con `equipoStackHTML("show",s.id,3)`. ✅
+- **~~Bloqueo Paso 9~~:** ✅ resuelto (22 jun) — `persistContenido()` reemplazada por `insertCdItem()`/`deleteCdItem()`. Nota: `persistContenido()` sigue en el código marcada como `// OBSOLETA — NO llamar desde el flujo normal` — deuda técnica menor, eliminar cuando haya oportunidad.
+- **Filtros del Planner:** actualmente solo implementado el filtro de tipo (`plFilter`: todos/shows/contenido). Los filtros de estado y rango de fechas están **pendientes** (especificados en el plan, no en el código aún).
+- **`groupByWeek()`:** en el código está inlined dentro de `buildPlanner()`, no como función independiente. Si B.4 Calendario la necesita, **conviene extraerla antes de implementar esa vista**.
 
 ---
 
@@ -32,10 +34,10 @@
 ### ~~A.1 — Dashboard~~ ✅ hecho
 Columna \"Equipo\" ya presente en `buildDash()` (confirmado en código, línea ~1953): `equipoStackHTML("show", s.id, 3)` en cada fila.
 
-### A.2 — Contenido Digital (desbloqueada tras Paso 9)
-1. Agregar `equipoStackHTML("contenido", item.id, 3)` en `cdCardHTML(item)` (Kanban), en la vista Lista (nueva columna), y en el header de la Ficha de Pieza.
-2. Agregar bloque `equipoAsignadoHTML("contenido", item.id, canEdit)` en la Ficha de Pieza (pestaña Info o sección aparte dentro de ella — decidir al implementar).
-3. En el Gantt de contenido: mostrar avatares en hover/tooltip, no dentro de la barra (las barras son angostas).
+### ~~A.2 — Contenido Digital~~ ✅ hecho (22 jun)
+1. `equipoStackHTML("contenido", item.id, 3)` presente en `cdCardHTML(item)` (Kanban), en la vista Lista (columna Equipo), y en `cdInfoHTML()` vía `equipoAsignadoHTML`. ✓
+2. Bloque `equipoAsignadoHTML("contenido", item.id, canEdit)` en la Ficha de Pieza. ✓
+3. En el Gantt de contenido: avatares en hover/tooltip, no dentro de la barra. ✓
 
 ### A.3 — Planner nuevo
 Todas las vistas del Planner muestran `equipoStackHTML(...)` en cada card/fila de show o pieza. Se implementa junto con cada vista de la Parte B.
@@ -146,7 +148,34 @@ Señalar semanas de viaje (`viaja:true` en `asignaciones`).
 - `function plUpdateShowEst(realIdx,sel)` / `plUpdateShowFecha(realIdx,inp)` — edición inline de shows desde el Planner.
 - `function plUpdateCdEst(id,sel)` / `plUpdateCdFecha(id,inp)` — edición inline de contenido desde el Planner.
 - `function buildContenidoGantt()` — base del Gantt unificado (B.3).
-- `function groupByWeek(items)` (~línea 4530) — ahora usada también por el Planner (B.1 la llama indirectamente vía `weekKey`/`weekLabel`).
+- `groupByWeek` — lógica actualmente **inlined dentro de `buildPlanner()`** (no es función independiente). Extraer como `function groupByWeek(items)` antes de implementar B.4 para poder reutilizarla.
 - `equipoStackHTML(entityType, entityId, max)` (~línea 5865) — en cada fila del Planner Lista.
 - `function openPanel(idx)` y `function openCdDetail(id)` — puntos de entrada al detalle (clic en fila del Planner).
 - `saveCdCampo()` / `saveShows()` — sync Supabase, reutilizados por las funciones de edición inline del Planner.
+
+---
+
+## Contraste planificacion.md vs index.html (22 jun 2026)
+
+### ✅ Coincidencias confirmadas
+- **A.1 Dashboard avatares** — `buildDash()` tiene `equipoStackHTML("show",s.id,3)` en columna Equipo. ✓
+- **A.2 Contenido Digital avatares** — `cdCardHTML()` y vista lista tienen avatares; `cdInfoHTML()` tiene `equipoAsignadoHTML`. ✓
+- **B.1 Planner Lista** — `buildPlanner()` implementa feed semanal con `weekKey`/`weekLabel`, edición inline via `plUpdateShowEst`, `plUpdateShowFecha`, `plUpdateCdEst`, `plUpdateCdFecha`, avatares `equipoStackHTML` en cada fila. ✓
+- **Funciones snapshot** — todas las listadas existen en el código: `buildPlanner`, `plUpdateShowEst/Fecha`, `plUpdateCdEst/Fecha`, `buildContenidoGantt`, `equipoStackHTML`, `openPanel`, `openCdDetail`, `saveCdCampo`, `saveShows`. ✓
+
+### ⚠️ Discrepancias menores
+- **`groupByWeek`** — el plan la describe como función reutilizable (~línea 4530); en el código está inlined dentro de `buildPlanner()`. No es problema funcional hoy, pero hay que extraerla antes de B.4.
+- **Filtros del Planner** — el plan especifica filtros de estado y rango de fechas. El código solo tiene filtro de tipo (`plFilter`: todos/shows/contenido). Pendiente.
+- **`persistContenido()`** — el plan dice "reemplazada"; el código la conserva marcada como `OBSOLETA`. Deuda técnica menor.
+- **A.3 Planner avatares** — B.1 los tiene. El ítem 7 del orden de implementación lo marca como gradual, lo cual es consistente.
+
+### 🔴 Próximo paso: B.4 Calendario mensual
+Lo que el plan pide y el código no tiene aún:
+- Grilla 7 columnas × semanas del mes
+- Chips de ítems por celda (shows + contenido) con nombre truncado + ícono de tipo
+- Navegación ← → por mes + botón "hoy"
+- Clic en chip → `openPanel(idx)` / `openCdDetail(id)`
+- Tooltips de equipo en hover de chip (no dentro de la celda)
+- Clic en celda vacía → modal "nuevo show/pieza en esta fecha"
+
+**Prerrequisito técnico:** extraer la lógica `groupByWeek` de `buildPlanner()` como función independiente, y agregar un cuarto tab en `#pl-filter-tabs` (o selector de vista tipo Contenido Digital) que llame a `buildPlannerCalendario()`. Esta función consumirá la misma data combinada que ya usa `buildPlanner()`.
