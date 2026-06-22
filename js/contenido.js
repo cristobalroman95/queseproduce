@@ -37,19 +37,86 @@ const CD_FIELD_MAP={
 const CD_REF_CATS=['Moodboard','Brief visual','Guion / Texto','Grabación','Edición','Entrega final','Otros'];
 
 // ── LOAD CONTENIDO ──
+// ── LOAD CONTENIDO ──
 async function loadContenido(){
   try{
     const {data,error}=await sb.from("contenido_digital").select("*").order("id",{ascending:true});
     if(error){ toast("⚠️ Error cargando contenido digital: "+error.message); return []; }
+    
+    // Si la tabla está vacía, insertar los datos de ejemplo
+    if(data && data.length === 0 && typeof DEFAULT_CONTENIDO !== 'undefined'){
+      toast("📦 Cargando contenido digital de ejemplo...");
+      const showIdToIdx={};
+      SHOWS.forEach((s,i)=>{ if(s.id)showIdToIdx[s.id]=i; });
+      
+      // Convertir showIdx (índice en el array de shows) a show_id real
+      const payload = DEFAULT_CONTENIDO.map(item => {
+        const showId = (item.showIdx !== null && item.showIdx !== undefined) ? SHOWS[item.showIdx]?.id : null;
+        return {
+          nombre: item.nombre,
+          tipo: item.tipo,
+          plataforma: item.plataforma,
+          estado: item.estado,
+          responsable: item.responsable,
+          fecha: item.fecha || null,
+          fecha_inicio: item.fechaInicio || null,
+          fecha_idea: item.fechaIdea || null,
+          show_id: showId,
+          url: item.url || "",
+          notas: item.notas || ""
+        };
+      });
+      
+      const {data:inserted, error:insError} = await sb.from("contenido_digital").insert(payload).select();
+      if(insError){ 
+        toast("⚠️ Error insertando contenido de ejemplo: "+insError.message);
+        return [];
+      }
+      
+      // Construir el array CONTENIDO con los datos insertados
+      const showIdToIdx2 = {};
+      SHOWS.forEach((s,i)=>{ if(s.id)showIdToIdx2[s.id]=i; });
+      
+      const result = (inserted||[]).map(row => ({
+        id: row.id,
+        nombre: row.nombre||"",
+        tipo: row.tipo||"Reel promo",
+        plataforma: row.plataforma||"IG + TikTok",
+        estado: row.estado||"Idea",
+        responsable: row.responsable||"Editor",
+        fecha: row.fecha||"",
+        fechaInicio: row.fecha_inicio||"",
+        fechaIdea: row.fecha_idea||"",
+        showIdx: row.show_id != null ? (showIdToIdx2[row.show_id] ?? null) : null,
+        url: row.url||"",
+        notas: row.notas||""
+      }));
+      
+      toast("✅ Contenido digital de ejemplo cargado");
+      return result;
+    }
+    
+    // Si ya hay datos, cargarlos normalmente
     const showIdToIdx={};
     SHOWS.forEach((s,i)=>{ if(s.id)showIdToIdx[s.id]=i; });
     return (data||[]).map(row=>({
-      id:row.id,nombre:row.nombre||"",tipo:row.tipo||"Reel promo",plataforma:row.plataforma||"IG + TikTok",estado:row.estado||"Idea",
-      responsable:row.responsable||"Editor",fecha:row.fecha||"",fechaInicio:row.fecha_inicio||"",fechaIdea:row.fecha_idea||"",
+      id:row.id,
+      nombre:row.nombre||"",
+      tipo:row.tipo||"Reel promo",
+      plataforma:row.plataforma||"IG + TikTok",
+      estado:row.estado||"Idea",
+      responsable:row.responsable||"Editor",
+      fecha:row.fecha||"",
+      fechaInicio:row.fecha_inicio||"",
+      fechaIdea:row.fecha_idea||"",
       showIdx:row.show_id!=null?(showIdToIdx[row.show_id]??null):null,
-      url:row.url||"",notas:row.notas||""
+      url:row.url||"",
+      notas:row.notas||""
     }));
-  }catch(e){ toast("⚠️ Error de conexión cargando contenido digital"); return []; }
+  }catch(e){ 
+    toast("⚠️ Error de conexión cargando contenido digital"); 
+    return []; 
+  }
 }
 
 async function insertCdItem(item){

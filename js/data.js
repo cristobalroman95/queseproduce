@@ -424,6 +424,253 @@ const DEFAULT_PRESETS_ROADMAP = {
   }
 };
 
+// ── DEFAULT CONTENIDO DIGITAL ──
+const DEFAULT_CONTENIDO = [
+  // ========== VINCULADOS A SHOWS REALIZADOS ==========
+  {
+    id: "cd1",
+    nombre: "Reel promocional · Show Bar Zona Norte",
+    tipo: "Reel promo",
+    plataforma: "IG + TikTok",
+    estado: "Publicado",
+    responsable: "Editor",
+    fecha: "2026-01-08",
+    fechaInicio: "2026-01-05",
+    fechaIdea: "2026-01-02",
+    showIdx: 0, // Show Bar Zona Norte
+    url: "https://instagram.com/reel/xyz123",
+    notas: "Reel de 45 segundos destacando los mejores momentos del show. Música con energía. Alcanzó 8.5k vistas."
+  },
+  {
+    id: "cd2",
+    nombre: "Post anuncio · Show Bar Sur",
+    tipo: "Orgánico",
+    plataforma: "Instagram",
+    estado: "Publicado",
+    responsable: "Community Manager",
+    fecha: "2026-01-14",
+    fechaInicio: "2026-01-12",
+    fechaIdea: "2026-01-10",
+    showIdx: 1, // Show Bar Sur
+    url: "https://instagram.com/p/abc456",
+    notas: "Anuncio del show con foto del venue. Buen engagement: 234 likes, 45 comentarios."
+  },
+  {
+    id: "cd3",
+    nombre: "Clip highlight · Teatro 1",
+    tipo: "Stream / clip",
+    plataforma: "YouTube + IG",
+    estado: "Publicado",
+    responsable: "Editor",
+    fecha: "2026-01-26",
+    fechaInicio: "2026-01-24",
+    fechaIdea: "2026-01-20",
+    showIdx: 2, // Teatro 1
+    url: "https://youtube.com/watch?v=def789",
+    notas: "Clip de 3 minutos con los mejores momentos del show de teatro. Incluye entrevista backstage."
+  },
+  {
+    id: "cd4",
+    nombre: "Story countdown · Show Bar Centro (San Valentín)",
+    tipo: "Orgánico",
+    plataforma: "Instagram",
+    estado: "Publicado",
+    responsable: "Community Manager",
+    fecha: "2026-02-12",
+    fechaInicio: "2026-02-10",
+    fechaIdea: "2026-02-08",
+    showIdx: 3, // Show Bar Centro
+    url: "",
+    notas: "Stories de countdown durante 3 días previos. Buen clima romántico para la fecha."
+  },
+  {
+    id: "cd5",
+    nombre: "Reel · Teatro Regional Valparaíso",
+    tipo: "Reel promo",
+    plataforma: "IG + TikTok",
+    estado: "Publicado",
+    responsable: "Editor",
+    fecha: "2026-03-05",
+    fechaInicio: "2026-03-02",
+    fechaIdea: "2026-02-28",
+    showIdx: 4, // Teatro 2
+    url: "https://tiktok.com/@user/video/ghi012",
+    notas: "Reel mostrando la ciudad de Valparaíso y el backstage. 12k reproducciones en TikTok."
+  },
+  {
+    id: "cd6",
+    nombre: "Fotos promocionales · Centro Eventos 1",
+    tipo: "Orgánico",
+    plataforma: "Instagram + Facebook",
+    estado: "Publicado",
+    responsable: "Fotógrafo",
+    fecha: "2026-03-18",
+    fechaInicio: "2026-03-15",
+    fechaIdea: "2026-03-10",
+    showIdx: 5, // Centro Eventos 1
+    url: "",
+    notas: "Set de 10 fotos profesional del show. Se usaron en la pauta de redes."
+  },
+  {
+    id: "cd7",
+    nombre: "Pauta Meta Ads · Teatro del Lago",
+    tipo: "Paid ad",
+    plataforma: "Meta Ads",
+    estado: "Publicado",
+    responsable: "Marketing",
+    fecha: "2026-04-14",
+    fechaInicio: "2026-04-10",
+    fechaIdea: "2026-04-05",
+    showIdx: 6, // Teatro 3
+    url: "",
+    notas: "Campaña de Facebook/IG con presupuesto $250k. CTR 4.2%, 345 clicks."
+  },
+  {
+    id: "cd8",
+    nombre: "Making-of · Grabación EP",
+    tipo: "Viral",
+    plataforma: "TikTok",
+    estado: "Publicado",
+    responsable: "Editor",
+    fecha: "2026-05-12",
+    fechaInicio: "2026-05-10",
+    fechaIdea: "2026-05-08",
+    showIdx: 7, // Contenido Digital Bloque
+    url: "https://tiktok.com/@user/video/viral456",
+    notas: "Video estilo 'detrás de cámaras' de la grabación del EP. Se volvió viral con 150k views."
+  },
+
+  // ========== VINCULADOS A SHOWS FUTUROS (CONFIRMADOS) ==========
+  {
+    id: "cd9",
+    nombre: "Reel promocional · Show Especial Aniversario",
+    tipo: "Reel promo",
+    plataforma: "IG + TikTok",
+    estado: "Listo para publicar",
+    responsable: "Editor",
+    fecha: "2026-06-18",
+    fechaInicio: "2026-06-14",
+    fechaIdea: "2026-06-10",
+    showIdx: 8, // Show Especial
+    url: "",
+    notas: "Reel con invitados especiales. Tiene que publicarse 2 días antes del show."
+  },
+  {
+    id: "cd10",
+    nombre: "Campaña de expectativa · Teatro Municipal La Serena",
+    tipo: "Paid ad",
+    plataforma: "Meta Ads",
+    estado: "En producción",
+    responsable: "Marketing",
+    fecha: "2026-07-08",
+    fechaInicio: "2026-07-04",
+    fechaIdea: "2026-07-01",
+    showIdx: 9, // Teatro Municipal 1
+    url: "",
+    notas: "Campaña de retargeting para la gira norte. Segmentación por geolocalización."
+  },
+  {
+    id: "cd11",
+    nombre: "Story tour · Gira Norte (La Serena)",
+    tipo: "Orgánico",
+    plataforma: "Instagram",
+    estado: "Idea",
+    responsable: "Community Manager",
+    fecha: "2026-07-12",
+    fechaInicio: "2026-07-09",
+    fechaIdea: "2026-07-07",
+    showIdx: 9, // Teatro Municipal 1
+    url: "",
+    notas: "Cobertura en vivo del viaje y llegada a La Serena. Publicar en historias destacadas."
+  },
+  {
+    id: "cd12",
+    nombre: "Reel · Gira Centro Cultural Curicó",
+    tipo: "Reel promo",
+    plataforma: "IG + TikTok",
+    estado: "Idea",
+    responsable: "Editor",
+    fecha: "2026-07-28",
+    fechaInicio: "2026-07-24",
+    fechaIdea: "2026-07-20",
+    showIdx: 11, // Centro Cultural 1
+    url: "",
+    notas: "Reel mostrando el venue remodelado y la expectativa del show."
+  },
+  {
+    id: "cd13",
+    nombre: "Pauta de lanzamiento · Gira Internacional Argentina",
+    tipo: "Paid ad",
+    plataforma: "Meta Ads + YouTube",
+    estado: "En producción",
+    responsable: "Marketing",
+    fecha: "2026-09-14",
+    fechaInicio: "2026-09-09",
+    fechaIdea: "2026-09-05",
+    showIdx: 14, // Gira Internacional 1
+    url: "",
+    notas: "Campaña cross-border para Buenos Aires. Presupuesto $500k ARS (aprox. $1.5M CLP)."
+  },
+
+  // ========== CONTENIDO INDEPENDIENTE (SIN SHOW ASOCIADO) ==========
+  {
+    id: "cd14",
+    nombre: "Contenido viral · Tendencia de invierno",
+    tipo: "Viral",
+    plataforma: "TikTok",
+    estado: "Publicado",
+    responsable: "Community Manager",
+    fecha: "2026-06-25",
+    fechaInicio: "2026-06-22",
+    fechaIdea: "2026-06-20",
+    showIdx: null,
+    url: "https://tiktok.com/@user/video/wintertrend",
+    notas: "Video aprovechando el trend de invierno. 45k reproducciones en 48 horas."
+  },
+  {
+    id: "cd15",
+    nombre: "Canje con marca de bebidas · Verano",
+    tipo: "Canje / collab",
+    plataforma: "Instagram",
+    estado: "En producción",
+    responsable: "Marketing",
+    fecha: "2026-12-20",
+    fechaInicio: "2026-12-10",
+    fechaIdea: "2026-12-01",
+    showIdx: null,
+    url: "",
+    notas: "Colaboración con marca de bebidas para el cierre de temporada. Definir alcance y beneficios."
+  },
+  {
+    id: "cd16",
+    nombre: "Post recopilatorio · Mejores momentos 2026",
+    tipo: "Orgánico",
+    plataforma: "Instagram + Facebook",
+    estado: "Idea",
+    responsable: "Community Manager",
+    fecha: "2026-12-28",
+    fechaInicio: "2026-12-20",
+    fechaIdea: "2026-12-15",
+    showIdx: null,
+    url: "",
+    notas: "Recopilación anual de fotos y videos. Ideal para cerrar el año con engagement."
+  },
+  {
+    id: "cd17",
+    nombre: "Reel de agradecimiento · Equipo 2026",
+    tipo: "Orgánico",
+    plataforma: "IG + TikTok",
+    estado: "Idea",
+    responsable: "Editor",
+    fecha: "2026-12-30",
+    fechaInicio: "2026-12-26",
+    fechaIdea: "2026-12-22",
+    showIdx: null,
+    url: "",
+    notas: "Video de agradecimiento a todo el equipo de producción. Incluye fotos backstage."
+  }
+];
+
 // ── DEFAULT FUNCTIONS (se mantienen igual) ──
 function defaultFichaTecnica() {
   return {
