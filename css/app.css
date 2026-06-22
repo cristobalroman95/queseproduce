@@ -414,9 +414,20 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .pl-view-tab.active{background:var(--p400);color:#fff;border-color:var(--p400);}
 .pl-view-tab:hover:not(.active){background:var(--g100);}
 
-/* ── VISTA ANUAL (original) ── */
-.cal-grid{display:flex;flex-direction:column;}
-.month-block{}.month-name{}.month-shows{}.cal-show{}.cal-content{}.cc-meta{}.cc-name{}.cs-date{}.cs-name{}
+/* ── VISTA ANUAL ── */
+.cal-grid{display:flex;flex-direction:column;gap:2px;}
+.month-block{display:flex;align-items:flex-start;gap:0;border-bottom:0.5px solid var(--border-soft);}
+.month-block:last-child{border-bottom:none;}
+.month-name{width:48px;flex-shrink:0;font-size:10px;font-weight:700;color:#9690C2;text-transform:uppercase;letter-spacing:.8px;padding:10px 0 10px 4px;line-height:1;}
+.month-shows{display:flex;flex-wrap:wrap;gap:5px;padding:6px 0;}
+.cal-show{display:flex;flex-direction:column;gap:1px;padding:5px 10px;border-radius:6px;cursor:pointer;min-width:120px;max-width:220px;transition:opacity .15s;}
+.cal-show:hover{opacity:.85;}
+.cs-date{font-size:10px;font-weight:600;opacity:.75;}
+.cs-name{font-size:12px;font-weight:700;line-height:1.2;}
+.cal-content{display:flex;flex-direction:column;gap:1px;padding:5px 10px;border-radius:6px;cursor:pointer;min-width:100px;max-width:200px;background:var(--g100);border:0.5px solid var(--border-soft);transition:background .15s;}
+.cal-content:hover{background:var(--g200);}
+.cc-meta{display:flex;align-items:center;gap:6px;font-size:10px;color:#9690C2;}
+.cc-name{font-size:11px;font-weight:600;color:#E4E1F7;line-height:1.2;}
 
 /* ── VISTA CALENDARIO MENSUAL (B.4) ── */
 .cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:14px;}

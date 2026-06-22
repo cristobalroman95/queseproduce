@@ -3,10 +3,16 @@ const MESES_FULL=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agos
 const DIAS_SEMANA=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 
 let plActiveFilter='todos';
-let plActiveView='anual';   // 'anual' | 'calendario'
+let plActiveView='anual';   // 'anual' | 'calendario' | 'gantt'
 let calYear=new Date().getFullYear();
 let calMonth=new Date().getMonth(); // 0-indexed
 let coordActiveFilter='proximos';
+
+// ── Estado Gantt del Planner (independiente del Gantt de Contenido) ──
+let _plGanttDayWidth=30;
+let _plGanttRowHeight=42;
+let _plGanttZoomTouched=false;
+let _plGanttCollapsed={};
 
 function showColor(tipo,estado){
   if(estado==="Tentativo")return{bg:"#FAEEDA",txt:"#633806"};
@@ -56,6 +62,7 @@ function plSetView(v,btn){
 }
 function _renderPlannerView(){
   if(plActiveView==='calendario') buildPlannerCalendario();
+  else if(plActiveView==='gantt') buildPlannerGantt();
   else buildPlanner();
 }
 
@@ -252,6 +259,217 @@ function calNuevoContenido(dateStr){
 function calOpenDay(dateStr){
   // Futuro: mostrar modal con todos los items del día
   toast('📅 '+fmtDate(dateStr));
+}
+
+
+// ── VISTA GANTT UNIFICADO (B.3) ──
+function setPlGanttDayWidth(v){_plGanttZoomTouched=true;_plGanttDayWidth=parseInt(v);buildPlannerGantt();}
+function setPlGanttRowHeight(v){_plGanttZoomTouched=true;_plGanttRowHeight=parseInt(v);buildPlannerGantt();}
+function togglePlGanttGroup(key){_plGanttCollapsed[key]=!_plGanttCollapsed[key];buildPlannerGantt();}
+
+function buildPlannerGantt(){
+  const grid=document.getElementById('planner-grid');
+  if(!grid)return;
+  const showFilter=plActiveFilter==='todos'||plActiveFilter==='shows';
+  const contFilter=plActiveFilter==='todos'||plActiveFilter==='contenido';
+
+  if(!_plGanttZoomTouched){_plGanttDayWidth=window.innerWidth<640?14:28;_plGanttRowHeight=window.innerWidth<640?32:40;}
+
+  // ── Resolver fechas de cada ítem ──
+  const resolved=[];
+
+  if(showFilter){
+    SHOWS.forEach((s,realIdx)=>{
+      if(!s.fecha)return;
+      const d=new Date(s.fecha+'T12:00:00');
+      resolved.push({kind:'show',realIdx,s,ini:d,fin:d,label:s.nombre,color:showGanttColor(s.tipo,s.estado)});
+    });
+  }
+  if(contFilter&&typeof CONTENIDO!=='undefined'){
+    CONTENIDO.forEach(it=>{
+      let idea=it.fechaIdea?new Date(it.fechaIdea+'T12:00:00'):null;
+      let ini=it.fechaInicio?new Date(it.fechaInicio+'T12:00:00'):null;
+      let fin=it.fecha?new Date(it.fecha+'T12:00:00'):null;
+      if(!ini&&idea)ini=idea; if(!fin)fin=ini||idea; if(!ini)ini=fin; if(!idea)idea=ini;
+      if(!ini&&!fin)return;
+      if(idea>ini){const t=idea;idea=ini;ini=t;}
+      if(ini>fin){const t=ini;ini=fin;fin=t;}
+      const hasPrep=!!(it.fechaIdea&&it.fechaInicio);
+      resolved.push({kind:'contenido',it,ini,fin,idea,hasPrep,label:it.nombre,color:cdGanttColor(it.tipo)});
+    });
+  }
+
+  if(!resolved.length){
+    grid.innerHTML=`<div class="card" style="text-align:center;color:#bbb;padding:40px;">No hay ítems con fechas para mostrar en el Gantt.</div>`;
+    return;
+  }
+
+  // ── Agrupar por show ──
+  const groupMap={}; const groupOrder=[];
+  resolved.forEach(r=>{
+    let key,label;
+    if(r.kind==='show'){
+      key='show-'+r.realIdx; label='🎤 '+r.s.nombre;
+    } else {
+      const idx=r.it.showIdx;
+      key=idx!=null?('show-'+idx):'sin-show';
+      label=idx!=null?('🎭 '+(SHOWS[idx]?.nombre||'Show')):'📦 Sin show vinculado';
+    }
+    if(!groupMap[key]){groupMap[key]={key,label,rows:[]};groupOrder.push(key);}
+    groupMap[key].rows.push(r);
+  });
+  // Ordenar grupos: primero shows por fecha, sin-show al final
+  groupOrder.sort((a,b)=>{
+    if(a==='sin-show')return 1; if(b==='sin-show')return -1;
+    const idxA=parseInt(a.replace('show-','')); const idxB=parseInt(b.replace('show-',''));
+    return (SHOWS[idxA]?.fecha||'').localeCompare(SHOWS[idxB]?.fecha||'');
+  });
+
+  // ── Rango de fechas global ──
+  const allDates=resolved.flatMap(r=>[r.ini,r.fin,r.idea].filter(Boolean));
+  let minDate=new Date(Math.min(...allDates)); let maxDate=new Date(Math.max(...allDates));
+  const today=new Date();today.setHours(12,0,0,0);
+  if(today<minDate)minDate=new Date(today); if(today>maxDate)maxDate=new Date(today);
+  minDate.setDate(minDate.getDate()-3); maxDate.setDate(maxDate.getDate()+3);
+  minDate.setHours(12,0,0,0); maxDate.setHours(12,0,0,0);
+
+  const dayWidth=_plGanttDayWidth; const rowHeight=_plGanttRowHeight;
+  const totalDays=Math.round((maxDate-minDate)/(1000*60*60*24))+1;
+  const totalWidth=totalDays*dayWidth;
+
+  // ── Filas visibles ──
+  const visibleRows=[];
+  groupOrder.forEach(key=>{
+    const g=groupMap[key];
+    const collapsed=!!_plGanttCollapsed[key];
+    visibleRows.push({type:'group',key,label:g.label,count:g.rows.length,collapsed});
+    if(!collapsed)g.rows.forEach(r=>visibleRows.push({type:'item',...r}));
+  });
+
+  // ── Canvas para ancho dinámico de labels ──
+  const canvas=document.createElement('canvas');
+  const ctx=canvas.getContext('2d');
+  ctx.font='11px Inter,-apple-system,sans-serif';
+  let maxLabelW=80;
+  visibleRows.forEach(r=>{
+    const w=ctx.measureText(r.label||'').width+(r.type==='group'?30:36);
+    if(w>maxLabelW)maxLabelW=w;
+  });
+  const labelColWidth=Math.min(Math.ceil(maxLabelW)+10, 260);
+
+  // ── Header: meses + días ──
+  const showDayNum=dayWidth>=14;
+  const dayCells=[]; const monthGroups=[]; let curMonth=null,curStart=0,curCount=0;
+  for(let d=0;d<totalDays;d++){
+    const date=new Date(minDate);date.setDate(minDate.getDate()+d);
+    const isWeekend=date.getDay()===0||date.getDay()===6;
+    const isToday=date.toDateString()===today.toDateString();
+    dayCells.push(`<div style="width:${dayWidth}px;flex-shrink:0;text-align:center;font-size:9px;color:${isToday?'#fff':'#9690C2'};background:${isToday?'var(--c400)':isWeekend?'rgba(255,255,255,0.04)':'transparent'};font-weight:${isToday?'700':'400'};border-radius:${isToday?'4px':'0'};padding:2px 0;">${showDayNum?date.getDate():''}</div>`);
+    const monthLabel=date.toLocaleDateString('es-CL',{month:'short'}).toUpperCase().replace('.','');
+    if(monthLabel!==curMonth){if(curMonth!==null)monthGroups.push({label:curMonth,start:curStart,count:curCount});curMonth=monthLabel;curStart=d;curCount=1;}else curCount++;
+  }
+  monthGroups.push({label:curMonth,start:curStart,count:curCount});
+  const monthHTML=monthGroups.map(m=>`<div style="position:absolute;left:${m.start*dayWidth}px;width:${m.count*dayWidth}px;font-size:10px;font-weight:700;color:#B7B2DA;text-transform:uppercase;letter-spacing:0.5px;padding:4px 0 3px 4px;border-left:1px solid var(--border-soft);">${m.label}</div>`).join('');
+  const todayOffset=Math.round((today-minDate)/(1000*60*60*24));
+  const todayLineLeft=todayOffset*dayWidth+dayWidth/2;
+
+  // ── Generar filas ──
+  let cursorY=0; const labelRowsHTML=[]; const barsHTML=[]; const groupBgHTML=[];
+  const weekendStripes=[];
+  for(let d=0;d<totalDays;d++){
+    const date=new Date(minDate);date.setDate(minDate.getDate()+d);
+    if(date.getDay()===0||date.getDay()===6)weekendStripes.push(`<div style="position:absolute;left:${d*dayWidth}px;top:0;width:${dayWidth}px;height:100%;background:rgba(255,255,255,0.025);"></div>`);
+  }
+
+  visibleRows.forEach(row=>{
+    if(row.type==='group'){
+      labelRowsHTML.push(`<div onclick="togglePlGanttGroup('${row.key}')" style="height:${rowHeight}px;display:flex;align-items:center;gap:6px;padding:0 10px;font-size:11px;font-weight:700;color:#fff;background:rgba(255,255,255,0.06);border-bottom:0.5px solid var(--border-soft);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        <span style="display:inline-block;transition:transform 0.15s;transform:rotate(${row.collapsed?'-90':'0'}deg);">▾</span> ${row.label} <span style="font-size:9px;color:#9690C2;font-weight:400;margin-left:auto;flex-shrink:0;">${row.count}</span>
+      </div>`);
+      groupBgHTML.push(`<div style="position:absolute;left:0;top:${cursorY}px;width:${totalWidth}px;height:${rowHeight}px;background:rgba(255,255,255,0.06);"></div>`);
+      cursorY+=rowHeight;
+    } else {
+      const top=cursorY+Math.max(4,rowHeight*0.18);
+      const barH=rowHeight-Math.max(8,rowHeight*0.36);
+
+      if(row.kind==='show'){
+        // Barra puntual: 1 día con color del show
+        const offsetDays=Math.round((row.ini-minDate)/(1000*60*60*24));
+        const left=offsetDays*dayWidth+2;
+        const width=Math.max(dayWidth-4,8);
+        const c=showColor(row.s.tipo,row.s.estado);
+        const showLabel=width>50;
+        labelRowsHTML.push(`<div onclick="goToShow(${row.realIdx})" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight<34?'10px':'11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${row.s.nombre}">🎤 ${row.s.nombre}</div>`);
+        barsHTML.push(`<div onclick="goToShow(${row.realIdx})" title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)}" style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px solid ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
+      } else {
+        // Barra de contenido: doble tramo si tiene preproducción
+        labelRowsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight<34?'10px':'11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${row.it.nombre}">${row.it.nombre}</div>`);
+        const color=row.color;
+        const opacity=row.it.estado==='Publicado'?0.5:0.9;
+        if(row.hasPrep){
+          const prepOff=Math.round((row.idea-minDate)/(1000*60*60*24));
+          const prepDur=Math.max(Math.round((row.ini-row.idea)/(1000*60*60*24)),1);
+          barsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" title="Preproducción: ${fmtDate(row.it.fechaIdea)} → ${fmtDate(row.it.fechaInicio)}" style="position:absolute;left:${prepOff*dayWidth+2}px;top:${top}px;width:${Math.max(prepDur*dayWidth-2,6)}px;height:${barH}px;background:repeating-linear-gradient(135deg,${color}55 0px,${color}55 4px,${color}22 4px,${color}22 8px);border:1px solid ${color}88;border-radius:6px 0 0 6px;cursor:pointer;box-sizing:border-box;"></div>`);
+          const prodOff=Math.round((row.ini-minDate)/(1000*60*60*24));
+          const prodDur=Math.max(Math.round((row.fin-row.ini)/(1000*60*60*24))+1,1);
+          const prodW=Math.max(prodDur*dayWidth-4,dayWidth-4);
+          barsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" title="${row.it.nombre} · Producción: ${fmtDate(row.it.fechaInicio)} → ${fmtDate(row.it.fecha)}" style="position:absolute;left:${prodOff*dayWidth}px;top:${top}px;width:${prodW}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:0 6px 6px 0;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${prodW>60?(cdEstEmoji(row.it.estado)+' '+row.it.nombre):cdEstEmoji(row.it.estado)}</div>`);
+        } else {
+          const off=Math.round((row.ini-minDate)/(1000*60*60*24));
+          const dur=Math.max(Math.round((row.fin-row.ini)/(1000*60*60*24))+1,1);
+          const w=Math.max(dur*dayWidth-4,dayWidth-4);
+          barsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" title="${row.it.nombre} · ${fmtDate(row.it.fecha||row.it.fechaInicio)}" style="position:absolute;left:${off*dayWidth+2}px;top:${top}px;width:${w}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:6px;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${w>60?(cdEstEmoji(row.it.estado)+' '+row.it.nombre):cdEstEmoji(row.it.estado)}</div>`);
+        }
+      }
+      cursorY+=rowHeight;
+    }
+  });
+
+  const bodyHeight=cursorY;
+
+  // ── Controles zoom ──
+  const controlsHTML=`<div class="gantt-controls" style="margin-bottom:10px;">
+    <div class="gantt-control-item"><label>🔍 Zoom tiempo</label><input type="range" min="6" max="50" step="1" value="${dayWidth}" oninput="setPlGanttDayWidth(this.value)"></div>
+    <div class="gantt-control-item"><label>↕ Alto filas</label><div class="gantt-vslider-wrap"><input type="range" min="26" max="60" step="2" value="${rowHeight}" oninput="setPlGanttRowHeight(this.value)"></div></div>
+    <button class="btn" style="font-size:10px;padding:3px 8px;" onclick="Object.keys(_plGanttCollapsed).forEach(k=>_plGanttCollapsed[k]=false);buildPlannerGantt()">Expandir todo</button>
+    <button class="btn" style="font-size:10px;padding:3px 8px;" onclick="groupOrder&&groupOrder.forEach(k=>_plGanttCollapsed[k]=true);buildPlannerGantt()">Colapsar todo</button>
+  </div>`;
+
+  grid.innerHTML=controlsHTML+`
+  <div class="gantt-wrap" style="display:flex;border:0.5px solid var(--border-soft);border-radius:8px;overflow:hidden;margin-top:4px;max-height:70vh;max-width:100%;">
+    <div class="gantt-labels" id="pl-gantt-labels" onscroll="syncPlGanttVertical(this)" style="width:${labelColWidth}px;flex-shrink:0;background:var(--surface2);border-right:1px solid var(--border-soft);overflow-y:auto;">
+      <div style="height:42px;border-bottom:1px solid var(--border-soft);position:sticky;top:0;background:var(--surface2);z-index:3;"></div>
+      ${labelRowsHTML.join('')}
+    </div>
+    <div class="gantt-scroll" id="pl-gantt-scroll" onscroll="syncPlGanttVertical(this)" style="flex:1;min-width:0;overflow:auto;">
+      <div style="position:relative;width:${totalWidth}px;">
+        <div style="height:42px;border-bottom:1px solid var(--border-soft);position:sticky;top:0;z-index:2;background:var(--surface2);">
+          ${monthHTML}
+          <div style="position:absolute;top:18px;left:0;display:flex;">${dayCells.join('')}</div>
+        </div>
+        <div style="position:relative;height:${bodyHeight}px;">
+          ${groupBgHTML.join('')}
+          ${weekendStripes.join('')}
+          <div style="position:absolute;left:${todayLineLeft}px;top:0;width:2px;height:100%;background:var(--c400);z-index:2;"></div>
+          ${barsHTML.join('')}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:10px;color:#9690C2;align-items:center;">
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:10px;border-radius:3px;border:2px solid #085041;background:#E1F5EE;display:inline-block;font-size:8px;text-align:center;">🎤</span>Show (puntual)</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#9690C255 0px,#9690C255 4px,#9690C222 4px,#9690C222 8px);border:1px solid #9690C288;display:inline-block;"></span>Preproducción</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#9690C2;display:inline-block;"></span>Producción</span>
+  </div>`;
+}
+
+function showGanttColor(tipo,estado){
+  const c=showColor(tipo,estado); return c.bg;
+}
+
+function syncPlGanttVertical(source){
+  const other=source.id==='pl-gantt-labels'?document.getElementById('pl-gantt-scroll'):document.getElementById('pl-gantt-labels');
+  if(other&&other.scrollTop!==source.scrollTop)other.scrollTop=source.scrollTop;
 }
 
 // ── COORDINACIÓN ──
