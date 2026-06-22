@@ -1,11 +1,5 @@
-let currentUser=null;
-
-// ── AUTH SYSTEM ──
+// ── ROLE DEFINITIONS ──
 const ROLE_DEFS={
-  // ⚠️ TEMPORAL: "invitado" es el rol que se asigna automáticamente a cualquiera que entre con Google
-  // por primera vez (ver trigger en Supabase). Hoy tiene visión completa, igual que "programador",
-  // a propósito — decisión tomada el 20-jun-2026 mientras se valida el alta por Google.
-  // Ajustar acá (o directamente el campo `rol` en la tabla `perfiles`) cuando se quiera restringir.
   invitado:{label:"Invitado",icon:"👋",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
   programador:{label:"Programador",icon:"⬛",color:"#1a1a18",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
   productor:{label:"Productor",icon:"🎬",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
@@ -15,7 +9,58 @@ const ROLE_DEFS={
   marketing:{label:"Marketing",icon:"📣",color:"var(--a600)",sections:["dashboard","shows","contenido","planner"],canEdit:false,showFinancials:false}
 };
 
+let currentUser=null;
 
+function getAllowedShowTabs(){
+  const all=["info","ficha","equipo","bitacora","roadmap","presupuesto","invitados","cdshow","cierre","multimedia"];
+  if(!currentUser)return all;
+  const role=ROLE_DEFS[currentUser.rol];
+  if(role&&role.showTabs)return role.showTabs;
+  return all;
+}
+function applyShowTabVisibility(){
+  const allowed=getAllowedShowTabs();
+  const map={resumen:"fd-resumen-btn",info:"fd-info-btn",ficha:"fd-ficha-btn",equipo:"fd-equipo-btn",bitacora:"fd-bitacora-btn",roadmap:"fd-rm-btn",presupuesto:"fd-presupuesto-btn",invitados:"fd-invitados-btn",cdshow:"fd-cdshow-btn",cierre:"fd-cierre-btn",multimedia:"fd-multimedia-btn"};
+  Object.keys(map).forEach(k=>{
+    const btn=document.getElementById(map[k]);
+    if(btn)btn.style.display=allowed.includes(k)?"":"none";
+  });
+}
+
+function isTecnico(){return currentUser&&currentUser.rol==="tecnico";}
+
+function applyRoleRestrictions(){
+  if(!currentUser)return;
+  const role=ROLE_DEFS[currentUser.rol]||ROLE_DEFS.tecnico;
+  const allowed=role.sections;
+  buildShows();
+  document.querySelectorAll(".nav-item").forEach(el=>{
+    const onclick=el.getAttribute("onclick")||"";
+    const match=onclick.match(/nav\('(\w+)'/);
+    if(match){
+      const sec=match[1];
+      el.style.display=allowed.includes(sec)?"flex":"none";
+    }
+  });
+  if(role.canEdit){
+    document.body.classList.add("can-edit");
+  } else {
+    document.body.classList.remove("can-edit");
+  }
+  const exp=document.getElementById("btn-export");
+  if(exp)exp.style.display=(currentUser.rol==="tecnico"||currentUser.rol==="marketing")?"none":"";
+  const newShowBtn=document.getElementById("btn-new-show");
+  if(newShowBtn)newShowBtn.style.display=role.canEdit?"":"none";
+  applyShowTabVisibility();
+  const firstSec=allowed[0]||"dashboard";
+  const firstNavEl=document.querySelector(`.nav-item[onclick*="nav('${firstSec}'"]`);
+  nav(firstSec,firstNavEl||document.querySelector(".nav-item"));
+  document.getElementById("topbar-uname").textContent=currentUser.loginName;
+  document.getElementById("topbar-urole").textContent=role.label;
+  document.getElementById("topbar-avatar").textContent=currentUser.loginName.charAt(0).toUpperCase();
+}
+
+// ── LOGIN ──
 async function loginWithGoogle(){
   const err=document.getElementById("login-error");
   const statusErr=document.getElementById("login-status-error");
@@ -31,14 +76,8 @@ async function loginWithGoogle(){
     if(btn)btn.disabled=false;
     err.textContent="No se pudo iniciar el acceso con Google. Probá de nuevo.";
   }
-  // Si no hay error, la página redirige a Google y vuelve — el resto del flujo
-  // (buscar perfil, chequear vencimiento, entrar) lo maneja resolveSessionAndEnter()
-  // desde el listener onAuthStateChange al final del archivo.
 }
 
-// Busca el perfil para una sesión activa y entra a la app. Reintenta una vez si el
-// perfil todavía no existe (cubre el caso raro en que el trigger de alta automática
-// en Supabase tarde unos milisegundos más que el round-trip del login).
 async function resolveSessionAndEnter(session,isFreshSignIn){
   const pending=document.getElementById("login-pending");
   const statusErr=document.getElementById("login-status-error");
@@ -73,12 +112,10 @@ async function resolveSessionAndEnter(session,isFreshSignIn){
 
   currentUser={id:perfil.id,loginName:perfil.nombre,nombre:perfil.nombre,rol:perfil.rol,exp:perfil.exp,nota:perfil.nota};
 
-  // Guardar la foto de Google en el perfil (fire-and-forget) para que Equipo pueda usarla como fallback
   const googleAvatar=session.user.user_metadata?.avatar_url||session.user.user_metadata?.picture||"";
   if(googleAvatar&&googleAvatar!==perfil.avatar_url){
     sb.from("perfiles").update({avatar_url:googleAvatar}).eq("id",perfil.id).then(()=>{});
   }
-  // Guardar también el email (fire-and-forget) para poder cruzarlo con el "Contacto" de cada persona en Equipo
   const googleEmail=session.user.email||"";
   if(googleEmail&&googleEmail!==perfil.email){
     sb.from("perfiles").update({email:googleEmail}).eq("id",perfil.id).then(()=>{});
@@ -89,47 +126,25 @@ async function resolveSessionAndEnter(session,isFreshSignIn){
   document.getElementById("login-screen").style.display="none";
   await enterApp();
 }
+
 async function doLogout(){
   if(!confirm("¿Cerrar sesión?"))return;
   await sb.auth.signOut();
   currentUser=null;
   location.reload();
 }
-function applyRoleRestrictions(){
-  if(!currentUser)return;
-  const role=ROLE_DEFS[currentUser.rol]||ROLE_DEFS.tecnico;
-  const allowed=role.sections;
-  // Re-render la tabla de shows ahora que se conoce el rol (oculta Ticket/Ingr. est. si corresponde)
-  buildShows();
-  // Hide nav items not in role
-  document.querySelectorAll(".nav-item").forEach(el=>{
-    const onclick=el.getAttribute("onclick")||"";
-    const match=onclick.match(/nav\('(\w+)'/);
-    if(match){
-      const sec=match[1];
-      el.style.display=allowed.includes(sec)?"flex":"none";
+
+// ── AUTH LISTENER ──
+document.addEventListener("DOMContentLoaded",()=>{
+  document.getElementById("landing").style.display="none";
+  document.getElementById("app").style.display="none";
+
+  sb.auth.onAuthStateChange(async (event,session)=>{
+    if(session){
+      await resolveSessionAndEnter(session,event==="SIGNED_IN");
+    }else{
+      currentUser=null;
+      document.getElementById("login-screen").style.display="flex";
     }
   });
-  // Edit buttons: visible only for roles with canEdit (programador + productor)
-  if(role.canEdit){
-    document.body.classList.add("can-edit");
-  } else {
-    document.body.classList.remove("can-edit");
-  }
-  // Export button: hide for tecnico and marketing
-  const exp=document.getElementById("btn-export");
-  if(exp)exp.style.display=(currentUser.rol==="tecnico"||currentUser.rol==="marketing")?"none":"";
-  // "+ Nuevo show": solo roles con permiso de edición (programador, productor)
-  const newShowBtn=document.getElementById("btn-new-show");
-  if(newShowBtn)newShowBtn.style.display=role.canEdit?"":"none";
-  // Tabs del detalle de show (vista completa): aplicar restricción por rol (ej. Técnico → solo Ficha técnica + Hoja de ruta)
-  applyShowTabVisibility();
-  // Navigate to first allowed section
-  const firstSec=allowed[0]||"dashboard";
-  const firstNavEl=document.querySelector(`.nav-item[onclick*="nav('${firstSec}'"]`);
-  nav(firstSec,firstNavEl||document.querySelector(".nav-item"));
-  // Update topbar chip
-  document.getElementById("topbar-uname").textContent=currentUser.loginName;
-  document.getElementById("topbar-urole").textContent=role.label;
-  document.getElementById("topbar-avatar").textContent=currentUser.loginName.charAt(0).toUpperCase();
-}
+});

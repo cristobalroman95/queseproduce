@@ -1,9 +1,4 @@
-// ── DATA VERSION ──
-// Incrementá este número cada vez que modifiques DEFAULT_SHOWS para forzar reset del localStorage
-const DATA_VERSION = "v11_2";
-const DATA_VERSION_KEY = "qp_data_version";
-
-// ── DATA ──
+// ── DEFAULT SHOWS ──
 const DEFAULT_SHOWS = [
   {n:1,nombre:"Show Bar · Zona Norte",venue:"Bar Centro Eventos",ciudad:"Ciudad A",fecha:"2026-01-10",hora:"21:00",aforo:300,ticket:9990,obj:0.80,tipo:"Show Bar",estado:"Realizado",vendidas:248,notas:""},
   {n:2,nombre:"Show Bar · Sur",venue:"Restobar Sur",ciudad:"Ciudad B",fecha:"2026-01-17",hora:"22:30",aforo:250,ticket:9990,obj:0.75,tipo:"Show Bar",estado:"Realizado",vendidas:203,notas:""},
@@ -25,9 +20,7 @@ const DEFAULT_SHOWS = [
   {n:18,nombre:"Cierre de Temporada",venue:"Bar Sur",ciudad:"Ciudad K",fecha:"2026-12-05",hora:"22:00",aforo:200,ticket:9990,obj:0.70,tipo:"Show Bar",estado:"Tentativo",vendidas:null,notas:""},
 ];
 
-// ── PRESETS DE HOJA DE RUTA ──
-// Cada preset es una plantilla de horarios estimados según el tipo de show.
-// El usuario puede editar libremente después de aplicarla a un show, duplicar presets o crear nuevos.
+// ── DEFAULT PRESETS ROADMAP ──
 const DEFAULT_PRESETS_ROADMAP = {
   "teatro":{
     nombre:"Teatro (montaje completo)",
@@ -151,7 +144,7 @@ const DEFAULT_PRESETS_ROADMAP = {
   },
 };
 
-// ── FICHA TÉCNICA: estructura por defecto ──
+// ── DEFAULT FUNCTIONS ──
 function defaultFichaTecnica(){
   return {
     sonido:"",
@@ -165,54 +158,7 @@ function defaultFichaTecnica(){
   };
 }
 
-// Asigna un preset de hoja de ruta según el tipo de show (usado al crear shows nuevos)
-function presetKeyForTipo(tipo){
-  if(tipo==="Teatro")return"teatro";
-  if(tipo==="Teatro Especial")return"teatro_especial";
-  if(tipo==="Show Bar")return"show_bar";
-  return"digital";
-}
-function freshRoadmapFromPreset(presetKey){
-  const preset=PRESETS_ROADMAP[presetKey]||PRESETS_ROADMAP["teatro"];
-  return JSON.parse(JSON.stringify(preset.secciones));
-}
-
-// ── PERSISTENCE ──
-function defaultCierre(){
-  // Cierre: misma estructura por categoria, con valor presupuestado y valor real
-  return {
-    categorias:[
-      {key:"ingresos",nombre:"Ingresos",esIngreso:true,items:[
-        {desc:"Zona Preferente",presup:0,real:0},
-        {desc:"Zona General",presup:0,real:0},
-        {desc:"Auspicios / Marcas",presup:0,real:0}
-      ]},
-      {key:"rrhh",nombre:"RRHH",esIngreso:false,items:[
-        {desc:"Artistas / Invitados",presup:0,real:0},
-        {desc:"Equipo técnico",presup:0,real:0},
-        {desc:"Producción",presup:0,real:0}
-      ]},
-      {key:"tecnica",nombre:"Técnica",esIngreso:false,items:[
-        {desc:"Arriendo venue",presup:0,real:0},
-        {desc:"Audio e iluminación",presup:0,real:0},
-        {desc:"Pantalla / CCTV",presup:0,real:0}
-      ]},
-      {key:"produccion",nombre:"Producción",esIngreso:false,items:[
-        {desc:"Ambientación",presup:0,real:0},
-        {desc:"Catering",presup:0,real:0},
-        {desc:"Traslados",presup:0,real:0}
-      ]},
-      {key:"marketing",nombre:"Marketing",esIngreso:false,items:[
-        {desc:"Paid media",presup:0,real:0},
-        {desc:"Fotos y diseño",presup:0,real:0}
-      ]}
-    ]
-  };
-}
-
 function defaultPresupuesto(tipo){
-  // Solo gastos VARIABLES por show (staff extra, arriendo, insumos).
-  // Los sueldos fijos de planta van en el consolidado de producción, no aquí.
   tipo=tipo||"Teatro";
   if(tipo==="Show Bar"){
     return{categorias:[
@@ -301,21 +247,45 @@ function defaultPresupuesto(tipo){
     ]},
   ]};
 }
-// Convierte una fila de la tabla ficha_tecnica al formato que usa el front (camelCase + contactoVenue anidado)
-function fichaRowToFront(row){
-  if(!row)return null;
-  return{
-    sonido:row.sonido||"",
-    luces:row.luces||"",
-    backline:row.backline||"",
-    video:row.video||"",
-    catering:row.catering||"",
-    riderArtista:row.rider_artista||"",
-    notasLibres:row.notas_libres||"",
-    contactoVenue:{
-      nombre:row.contacto_nombre||"",
-      telefono:row.contacto_telefono||"",
-      rol:row.contacto_rol||"",
-    },
+
+function defaultCierre(){
+  return {
+    categorias:[
+      {key:"ingresos",nombre:"Ingresos",esIngreso:true,items:[
+        {desc:"Zona Preferente",presup:0,real:0},
+        {desc:"Zona General",presup:0,real:0},
+        {desc:"Auspicios / Marcas",presup:0,real:0}
+      ]},
+      {key:"rrhh",nombre:"RRHH",esIngreso:false,items:[
+        {desc:"Artistas / Invitados",presup:0,real:0},
+        {desc:"Equipo técnico",presup:0,real:0},
+        {desc:"Producción",presup:0,real:0}
+      ]},
+      {key:"tecnica",nombre:"Técnica",esIngreso:false,items:[
+        {desc:"Arriendo venue",presup:0,real:0},
+        {desc:"Audio e iluminación",presup:0,real:0},
+        {desc:"Pantalla / CCTV",presup:0,real:0}
+      ]},
+      {key:"produccion",nombre:"Producción",esIngreso:false,items:[
+        {desc:"Ambientación",presup:0,real:0},
+        {desc:"Catering",presup:0,real:0},
+        {desc:"Traslados",presup:0,real:0}
+      ]},
+      {key:"marketing",nombre:"Marketing",esIngreso:false,items:[
+        {desc:"Paid media",presup:0,real:0},
+        {desc:"Fotos y diseño",presup:0,real:0}
+      ]}
+    ]
   };
+}
+
+function presetKeyForTipo(tipo){
+  if(tipo==="Teatro")return"teatro";
+  if(tipo==="Teatro Especial")return"teatro_especial";
+  if(tipo==="Show Bar")return"show_bar";
+  return"digital";
+}
+function freshRoadmapFromPreset(presetKey){
+  const preset=DEFAULT_PRESETS_ROADMAP[presetKey]||DEFAULT_PRESETS_ROADMAP["teatro"];
+  return JSON.parse(JSON.stringify(preset.secciones));
 }
