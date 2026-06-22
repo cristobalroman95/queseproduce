@@ -23,7 +23,7 @@ function showColor(tipo,estado){
 }
 
 // ── FUNCIÓN REUTILIZABLE: agrupar items por semana ──
-function groupByWeek(items, getFecha){
+function groupItemsByWeek(items, getFecha){
   const weeks=[];
   const weekMap={};
   items.forEach(item=>{
