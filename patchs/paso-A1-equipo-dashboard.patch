@@ -19,18 +19,3 @@ index 28f2a70..84a3f31 100644
      </tr>`).join("");
  }
  
-diff --git a/planificacion.md b/planificacion.md
-index 74cb9bc..bc33bd1 100644
---- a/planificacion.md
-+++ b/planificacion.md
-@@ -61,8 +61,8 @@ Tipo (shows / contenido / todos), estado, rango de fechas, y — nuevo — filtr
- ---
- 
- ## Orden de implementación sugerido
--1. **A.1** — Avatares en Dashboard (rápido, ningún bloqueo, se puede hacer ahora mismo).
--2. **Paso 9** — Fix de `persistContenido()` a upsert-por-id (prerequisito de todo lo demás que toca contenido digital).
-+1. ~~**A.1** — Avatares en Dashboard~~ ✅ hecho (22 jun).
-+2. ~~**Paso 9** — Fix de `persistContenido()`~~ ✅ hecho (22 jun).
- 3. **A.2** — Avatares + bloque "Equipo asignado" en Contenido Digital (cards, lista, ficha de pieza).
- 4. **B, vistas 1 y 4** (Lista mejorada + Calendario mensual) — las dos más fundacionales y menos parecidas entre sí.
- 5. **B, vistas 2 y 3** (Kanban por estado + Gantt unificado).
