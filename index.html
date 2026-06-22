@@ -4423,14 +4423,14 @@ async function loadContenido(){
 
 // Persistencia: borra todas las filas e inserta desde el estado en memoria
 // (mismo patrón que roadmap/presupuesto/cierre para máxima consistencia)
+// ── persistContenido: OBSOLETA — reemplazada por insertCdItem/deleteCdItem (operaciones puntuales).
+// Se conserva solo como reconstrucción de emergencia; NO llamar desde el flujo normal.
 async function persistContenido(){
   try{
-    // 1. Borrar todo
     const {error:delErr}=await sb.from("contenido_digital").delete().neq("id",0);
     if(delErr){ toast("⚠️ Error borrando contenido previo: "+delErr.message); return; }
-    // 2. Reinsertar desde memoria (sin incluir id para que Supabase lo genere)
     if(!CONTENIDO.length)return;
-      const payload=CONTENIDO.map(item=>({
+    const payload=CONTENIDO.map(item=>({
       nombre:     item.nombre||"",
       tipo:       item.tipo||"Reel promo",
       plataforma: item.plataforma||"IG + TikTok",
@@ -4445,17 +4445,47 @@ async function persistContenido(){
     }));
     const {data:inserted,error:insErr}=await sb.from("contenido_digital").insert(payload).select();
     if(insErr){ toast("⚠️ Error guardando contenido digital: "+insErr.message); return; }
-    // Actualizar ids en memoria con los generados por Supabase
     (inserted||[]).forEach((row,i)=>{ if(CONTENIDO[i])CONTENIDO[i].id=row.id; });
   }catch(e){
     toast("⚠️ Error de conexión guardando contenido digital");
   }
 }
 
-let contenidoSaveChain=Promise.resolve();
-function saveContenidoData(){
-  contenidoSaveChain=contenidoSaveChain.then(()=>persistContenido()).catch(()=>{});
-  return contenidoSaveChain;
+// Alta puntual: INSERT de una sola pieza nueva, devuelve el id generado por Supabase.
+async function insertCdItem(item){
+  try{
+    const payload={
+      nombre:     item.nombre||"",
+      tipo:       item.tipo||"Reel promo",
+      plataforma: item.plataforma||"IG + TikTok",
+      estado:     item.estado||"Idea",
+      responsable:item.responsable||"Editor",
+      fecha:      item.fecha||null,
+      fecha_inicio: item.fechaInicio||null,
+      fecha_idea: item.fechaIdea||null,
+      show_id:    item.showIdx!=null ? (SHOWS[item.showIdx]?.id||null) : null,
+      url:        item.url||"",
+      notas:      item.notas||"",
+    };
+    const {data,error}=await sb.from("contenido_digital").insert(payload).select();
+    if(error){ toast("⚠️ Error guardando pieza: "+error.message); return null; }
+    return data?.[0]?.id ?? null;
+  }catch(e){
+    toast("⚠️ Error de conexión al guardar pieza");
+    return null;
+  }
+}
+
+// Baja puntual: DELETE de una sola pieza por id real de BD.
+async function deleteCdItem(id){
+  try{
+    const {error}=await sb.from("contenido_digital").delete().eq("id",id).select();
+    if(error){ toast("⚠️ Error eliminando pieza: "+error.message); return false; }
+    return true;
+  }catch(e){
+    toast("⚠️ Error de conexión al eliminar pieza");
+    return false;
+  }
 }
 
 
@@ -4933,42 +4963,50 @@ function openEditContenido(id){
   document.getElementById('cd-modal-overlay').classList.add('open');
 }
 
-function saveContenido(){
+async function saveContenido(){
   const nombre=document.getElementById('cd-f-nombre').value.trim();
   if(!nombre){toast('⚠️ Ingresá un nombre para la pieza');return;}
   const showVal=document.getElementById('cd-f-show').value;
-      const item={
-      nombre,
-      tipo:       document.getElementById('cd-f-tipo').value,
-      plataforma: document.getElementById('cd-f-plataforma').value,
-      estado:     document.getElementById('cd-f-estado').value,
-      responsable:document.getElementById('cd-f-responsable').value,
-      fecha:      document.getElementById('cd-f-fecha').value,
-      fechaInicio: document.getElementById('cd-f-fecha-inicio').value,
-      showIdx:    showVal!==''?parseInt(showVal):null,
-      url:        document.getElementById('cd-f-url').value.trim(),
-      notas:      document.getElementById('cd-f-notas').value.trim(),
-    };
+  const item={
+    nombre,
+    tipo:       document.getElementById('cd-f-tipo').value,
+    plataforma: document.getElementById('cd-f-plataforma').value,
+    estado:     document.getElementById('cd-f-estado').value,
+    responsable:document.getElementById('cd-f-responsable').value,
+    fecha:      document.getElementById('cd-f-fecha').value,
+    fechaInicio: document.getElementById('cd-f-fecha-inicio').value,
+    showIdx:    showVal!==''?parseInt(showVal):null,
+    url:        document.getElementById('cd-f-url').value.trim(),
+    notas:      document.getElementById('cd-f-notas').value.trim(),
+  };
   if(cdEditingId!=null){
-    // Edición: preservar id
+    // Edición desde modal: UPDATE puntual por id (preserva todas las FKs externas)
     item.id=cdEditingId;
     const idx=CONTENIDO.findIndex(c=>String(c.id)===String(cdEditingId));
     if(idx>=0)CONTENIDO[idx]=item;
+    await saveCdCampo(item, null); // changedField nulo → full update de todos los campos
+    closeCdModal();
+    buildContenido();
+    renderFullDetailIfOpen();
+    toast('✅ Pieza actualizada');
   } else {
-    // Alta: id lo asigna Supabase después del persistContenido()
+    // Alta: INSERT puntual — Supabase devuelve el id real, no cambia ids existentes
+    closeCdModal();
+    const newId=await insertCdItem(item);
+    if(newId==null)return; // error ya notificado en insertCdItem
+    item.id=newId;
     CONTENIDO.push(item);
+    buildContenido();
+    renderFullDetailIfOpen();
+    toast('✅ Pieza agregada');
   }
-  saveContenidoData();
-  closeCdModal();
-  buildContenido();
-  renderFullDetailIfOpen();
-  toast(cdEditingId!=null?'✅ Pieza actualizada':'✅ Pieza agregada');
 }
 
-function deleteCd(id){
+async function deleteCd(id){
   if(!confirm('¿Eliminar esta pieza de contenido?'))return;
+  const ok=await deleteCdItem(id);
+  if(!ok)return;
   CONTENIDO=CONTENIDO.filter(c=>String(c.id)!==String(id));
-  saveContenidoData(); // borra+reinserta todo → el deleted queda afuera
   buildContenido();
   renderFullDetailIfOpen();
   toast('🗑 Pieza eliminada');
@@ -5596,10 +5634,11 @@ async function saveCdCampo(item, changedField){
   }
 }
 
-function deleteCdFromDetail(id){
+async function deleteCdFromDetail(id){
   if(!confirm('¿Eliminar esta pieza de contenido?'))return;
+  const ok=await deleteCdItem(id);
+  if(!ok)return;
   CONTENIDO=CONTENIDO.filter(c=>String(c.id)!==String(id));
-  saveContenidoData();
   buildContenido();
   renderFullDetailIfOpen();
   closeCdDetail();
