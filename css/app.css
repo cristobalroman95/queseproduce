@@ -414,6 +414,23 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .pl-view-tab.active{background:var(--p400);color:#fff;border-color:var(--p400);}
 .pl-view-tab:hover:not(.active){background:var(--g100);}
 
+/* ── PLANNER: vista Kanban (B.2) ── */
+.pl-kanban-toggle{display:flex;gap:8px;margin-bottom:14px;}
+.pl-kanban-toggle-btn{padding:6px 16px;border-radius:20px;border:0.5px solid var(--border-soft);background:transparent;color:#9690C2;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;}
+.pl-kanban-toggle-btn.active{background:var(--p400);color:#fff;border-color:var(--p400);}
+.pl-kanban-toggle-btn:hover:not(.active){background:var(--g100);}
+.pl-kanban-cols{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;align-items:flex-start;}
+.pl-kanban-col{min-width:230px;max-width:250px;flex-shrink:0;background:var(--g50);border-radius:10px;padding:10px;min-height:130px;transition:background .15s,box-shadow .15s;}
+.pl-kanban-col.drag-over{background:var(--p50);box-shadow:inset 0 0 0 2px var(--p400);}
+.pl-kanban-col-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9690C2;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+.pl-kanban-col-cnt{background:rgba(255,255,255,0.08);border-radius:10px;padding:1px 7px;font-size:9px;}
+.pl-kanban-card{background:var(--surface);border:0.5px solid var(--border-soft);border-radius:8px;padding:10px 12px;margin-bottom:7px;cursor:grab;transition:box-shadow .15s,opacity .15s;}
+.pl-kanban-card:hover{box-shadow:0 2px 8px rgba(0,0,0,0.07);}
+.pl-kanban-card.dragging{opacity:0.4;}
+.pl-kanban-card-nombre{font-size:12px;font-weight:600;color:#F5F4FB;line-height:1.35;}
+.pl-kanban-card-meta{font-size:10px;color:#9690C2;margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.pl-kanban-empty{font-size:11px;color:#ccc;text-align:center;padding:10px 0;}
+
 /* ── VISTA ANUAL ── */
 .cal-grid{display:flex;flex-direction:column;gap:2px;}
 .month-block{display:flex;align-items:flex-start;gap:0;border-bottom:0.5px solid var(--border-soft);}

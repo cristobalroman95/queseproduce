@@ -50,6 +50,8 @@ Para mantener la integridad de las FK y evitar IDs huérfanos, se usa un patrón
 - **Relación 1:N con edición de campo individual** (`contenido_digital`, `contenido_tasks`, etc.):
   `UPDATE` puntual por `id` (ej: `saveCdCampo`). No se tocan las demás filas.
 
+- **Excepción puntual en `shows`:** la tabla `shows` se persiste normalmente como bloque completo (`saveShows()`, upsert de todo el array vía formulario). Para cambios aislados de un solo campo desde una vista que no abre el formulario completo (ej. drag & drop en el Kanban del Planner), se permite un `UPDATE` puntual por `id` sobre ese campo únicamente (ej: `sb.from('shows').update({estado}).eq('id', show.id)` en `plKanbanDrop`), revirtiendo el valor local si el `UPDATE` falla.
+
 - **Relación 1:N con alta/baja de ítems** (`contenido_digital`, `invitados`):
   - **Alta:** `INSERT` puntual capturando el `id` devuelto (`insertCdItem`).
   - **Baja:** `DELETE` puntual por `id` (`deleteCdItem`).
@@ -71,9 +73,9 @@ Para mantener la integridad de las FK y evitar IDs huérfanos, se usa un patrón
 
 ## 8. Convenciones del Planner
 - **Dispatcher central:** `_renderPlannerView()` decide qué función de build llamar según `plActiveView`. Siempre llamar esto desde `nav()` y `enterApp()`, nunca `buildPlanner()` directamente.
-- **Selector de vista:** `#pl-view-tabs` en `index.html` con tabs `.pl-view-tab`. Agregar nuevas vistas (Gantt, Kanban) sumando un tab aquí y un case en `_renderPlannerView()`.
-- **Filtro de tipo:** `plActiveFilter` (`todos` / `shows` / `contenido`) es transversal a todas las vistas del Planner.
-- **`groupByWeek(items, getFecha)`:** Función global en `planner.js`. Recibe un array y un getter de fecha, devuelve semanas `{key, monday, sunday, items}` ordenadas. Reutilizar en Gantt y Kanban.
+- **Selector de vista:** `#pl-view-tabs` en `index.html` con tabs `.pl-view-tab`. Vistas actuales: Anual, Calendario, Gantt, Kanban. Queda pendiente sumar un quinto tab para Carga de Equipo (B.5).
+- **Filtro de tipo:** `plActiveFilter` (`todos` / `shows` / `contenido`) es transversal a Anual, Calendario y Gantt. **Excepción:** en Kanban, `#pl-filter-tabs` se oculta (`plSetView`) porque la vista usa su propio toggle interno `plKanbanMode` (`shows` / `contenido`), ya que cada tipo tiene estados incompatibles entre sí.
+- **`groupItemsByWeek(items, getFecha)`:** función global en `planner.js`, definida pero actualmente sin ningún llamador (código muerto). No confundir con `groupByWeek(items)` de `contenido.js` (un parámetro, sin getter de fecha), que es la que realmente usa la vista semanal de Contenido Digital.
 
 ---
 *Este documento se actualiza cuando hay cambios estructurales importantes en la arquitectura o convenciones de código.*

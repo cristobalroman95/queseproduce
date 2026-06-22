@@ -3,7 +3,7 @@ const MESES_FULL=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agos
 const DIAS_SEMANA=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 
 let plActiveFilter='todos';
-let plActiveView='anual';   // 'anual' | 'calendario' | 'gantt'
+let plActiveView='anual';   // 'anual' | 'calendario' | 'gantt' | 'kanban'
 let calYear=new Date().getFullYear();
 let calMonth=new Date().getMonth(); // 0-indexed
 let coordActiveFilter='proximos';
@@ -13,6 +13,11 @@ let _plGanttDayWidth=30;
 let _plGanttRowHeight=42;
 let _plGanttZoomTouched=false;
 let _plGanttCollapsed={};
+
+// ── Estado Kanban del Planner (B.2) ──
+const SHOW_ESTADOS=['Tentativo','Confirmado','En proceso','Realizado','Cancelado'];
+let plKanbanMode='shows';   // 'shows' | 'contenido' — toggle dentro de la vista Kanban (Opción A)
+let _plKanbanDrag=null;     // {kind:'show'|'contenido', id}
 
 function showColor(tipo,estado){
   if(estado==="Tentativo")return{bg:"#FAEEDA",txt:"#633806"};
@@ -58,11 +63,15 @@ function plSetView(v,btn){
   // Mostrar/ocultar leyenda (solo vista anual)
   const legend=document.querySelector('.pl-legend');
   if(legend)legend.style.display=v==='anual'?'':'none';
+  // El filtro todos/shows/contenido no aplica en Kanban (usa su propio toggle interno)
+  const filterTabs=document.getElementById('pl-filter-tabs');
+  if(filterTabs)filterTabs.style.display=v==='kanban'?'none':'';
   _renderPlannerView();
 }
 function _renderPlannerView(){
   if(plActiveView==='calendario') buildPlannerCalendario();
   else if(plActiveView==='gantt') buildPlannerGantt();
+  else if(plActiveView==='kanban') buildPlannerKanban();
   else buildPlanner();
 }
 
@@ -461,6 +470,109 @@ function buildPlannerGantt(){
     <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#9690C255 0px,#9690C255 4px,#9690C222 4px,#9690C222 8px);border:1px solid #9690C288;display:inline-block;"></span>Preproducción</span>
     <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#9690C2;display:inline-block;"></span>Producción</span>
   </div>`;
+}
+
+// ── VISTA KANBAN POR ESTADO (B.2) ──
+// Opción A: toggle "Ver Shows" / "Ver Contenido" dentro de la vista (no se mezclan estados: son vocabularios distintos).
+function plKanbanSetMode(mode){
+  plKanbanMode=mode;
+  buildPlannerKanban();
+}
+function buildPlannerKanban(){
+  const grid=document.getElementById('planner-grid');
+  if(!grid)return;
+  const canEdit=!!(currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit);
+
+  const toggleHTML=`<div class="pl-kanban-toggle">
+    <button class="pl-kanban-toggle-btn ${plKanbanMode==='shows'?'active':''}" onclick="plKanbanSetMode('shows')">🎤 Shows / eventos</button>
+    <button class="pl-kanban-toggle-btn ${plKanbanMode==='contenido'?'active':''}" onclick="plKanbanSetMode('contenido')">🎬 Contenido digital</button>
+  </div>`;
+
+  let colsHTML;
+  if(plKanbanMode==='shows'){
+    colsHTML=SHOW_ESTADOS.map(estado=>{
+      const items=SHOWS.map((s,realIdx)=>({s,realIdx})).filter(o=>(o.s.estado||'Tentativo')===estado);
+      const cards=items.map(o=>plKanbanShowCard(o.s,o.realIdx,canEdit)).join('')||`<div class="pl-kanban-empty">Sin shows</div>`;
+      const dropAttrs=canEdit?`ondragover="plKanbanDragOver(event)" ondragleave="plKanbanDragLeave(event)" ondrop="plKanbanDrop(event,'${estado}')"`:'';
+      return`<div class="pl-kanban-col" ${dropAttrs}>
+        <div class="pl-kanban-col-hdr"><span>${estado}</span><span class="pl-kanban-col-cnt">${items.length}</span></div>
+        ${cards}
+      </div>`;
+    }).join('');
+  } else {
+    const contenido=typeof CONTENIDO!=='undefined'?CONTENIDO:[];
+    colsHTML=CD_ESTADOS.map(estado=>{
+      const items=contenido.filter(c=>c.estado===estado);
+      const cards=items.map(it=>plKanbanContenidoCard(it,canEdit)).join('')||`<div class="pl-kanban-empty">Sin piezas</div>`;
+      const dropAttrs=canEdit?`ondragover="plKanbanDragOver(event)" ondragleave="plKanbanDragLeave(event)" ondrop="plKanbanDrop(event,'${estado}')"`:'';
+      return`<div class="pl-kanban-col" ${dropAttrs}>
+        <div class="pl-kanban-col-hdr"><span>${cdEstEmoji(estado)} ${estado}</span><span class="pl-kanban-col-cnt">${items.length}</span></div>
+        ${cards}
+      </div>`;
+    }).join('');
+  }
+
+  grid.innerHTML=toggleHTML+`<div class="pl-kanban-cols">${colsHTML}</div>`;
+}
+function plKanbanShowCard(s,realIdx,canEdit){
+  const equipo=equipoStackHTML('show',s.id,3);
+  const dragAttrs=canEdit?`draggable="true" ondragstart="plKanbanDragStart(event,'show',${realIdx})" ondragend="plKanbanDragEnd(event)"`:'';
+  return`<div class="pl-kanban-card" ${dragAttrs} onclick="goToShow(${realIdx})">
+    <div class="pl-kanban-card-nombre">🎤 ${s.nombre}</div>
+    <div class="pl-kanban-card-meta"><span>${s.fecha?fmtDate(s.fecha):'Sin fecha'}</span></div>
+    <div class="pl-kanban-card-meta">${equipo}</div>
+  </div>`;
+}
+function plKanbanContenidoCard(item,canEdit){
+  const equipo=equipoStackHTML('contenido',item.id,3);
+  const dragAttrs=canEdit?`draggable="true" ondragstart="plKanbanDragStart(event,'contenido','${item.id}')" ondragend="plKanbanDragEnd(event)"`:'';
+  return`<div class="pl-kanban-card" ${dragAttrs} onclick="openCdDetail('${item.id}')">
+    <div class="pl-kanban-card-nombre">${item.nombre}</div>
+    <div class="pl-kanban-card-meta"><span>${item.fecha?fmtDate(item.fecha):'Sin fecha'}</span></div>
+    <div class="pl-kanban-card-meta">${equipo}</div>
+  </div>`;
+}
+function plKanbanDragStart(e,kind,id){
+  _plKanbanDrag={kind,id};
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',String(id));
+}
+function plKanbanDragEnd(e){
+  e.currentTarget.classList.remove('dragging');
+  _plKanbanDrag=null;
+  document.querySelectorAll('.pl-kanban-col.drag-over').forEach(c=>c.classList.remove('drag-over'));
+}
+function plKanbanDragOver(e){
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+function plKanbanDragLeave(e){
+  e.currentTarget.classList.remove('drag-over');
+}
+async function plKanbanDrop(e,newEstado){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const drag=_plKanbanDrag;
+  if(!drag)return;
+  if(drag.kind==='show'){
+    const s=SHOWS[drag.id];
+    if(!s||s.estado===newEstado)return;
+    const prevEstado=s.estado;
+    s.estado=newEstado;
+    buildPlannerKanban();
+    try{
+      const{error}=await sb.from('shows').update({estado:newEstado}).eq('id',s.id);
+      if(error){ s.estado=prevEstado; buildPlannerKanban(); toast('⚠️ Error guardando estado: '+error.message); }
+      else toast('✅ '+s.nombre+' → '+newEstado);
+    }catch(err){ s.estado=prevEstado; buildPlannerKanban(); toast('⚠️ Error de conexión guardando estado'); }
+  } else {
+    const item=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).find(c=>String(c.id)===String(drag.id));
+    if(!item||item.estado===newEstado)return;
+    updateCdField(item.id,'estado',newEstado);
+    buildPlannerKanban();
+    toast('✅ '+item.nombre+' → '+newEstado);
+  }
 }
 
 function showGanttColor(tipo,estado){
