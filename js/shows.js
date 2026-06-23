@@ -203,8 +203,7 @@ function buildShows(){
         ${equipoStackHTML("show", s.id, 3)}
         <button class="btn" style="font-size:9px; padding:2px 6px; white-space:nowrap;" 
                 onclick="event.stopPropagation(); openQuickTeam('show', ${s.id}, '${s.nombre.replace(/'/g, "\\'")}')">
-          ✏️ Editar
-        </button>
+          ✏️</button>
       </td>
       <td>${s.aforo>0?s.aforo+"<br><span style='font-size:10px;color:#bbb;'>"+Math.round(s.obj*100)+"% obj.</span>":"—"}</td>
       <td style="font-variant-numeric:tabular-nums;">${hideFin?"—":(s.ticket>0?fmtCLP(s.ticket):"—")}</td>
