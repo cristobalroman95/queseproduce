@@ -275,6 +275,21 @@ function calOpenDay(dateStr){
 function setPlGanttDayWidth(v){_plGanttZoomTouched=true;_plGanttDayWidth=parseInt(v);buildPlannerGantt();}
 function setPlGanttRowHeight(v){_plGanttZoomTouched=true;_plGanttRowHeight=parseInt(v);buildPlannerGantt();}
 function togglePlGanttGroup(key){_plGanttCollapsed[key]=!_plGanttCollapsed[key];buildPlannerGantt();}
+function expandAllPlGanttGroups(){_plGanttCollapsed={};buildPlannerGantt();}
+function collapseAllPlGanttGroups(){
+  const showFilter=plActiveFilter==='todos'||plActiveFilter==='shows';
+  const contFilter=plActiveFilter==='todos'||plActiveFilter==='contenido';
+  const keys=new Set();
+  if(showFilter){ SHOWS.forEach((s,realIdx)=>{ if(s.fecha)keys.add('show-'+realIdx); }); }
+  if(contFilter&&typeof CONTENIDO!=='undefined'){
+    CONTENIDO.forEach(it=>{
+      if(!it.fechaIdea&&!it.fechaInicio&&!it.fecha)return;
+      keys.add(it.showIdx!=null?('show-'+it.showIdx):'sin-show');
+    });
+  }
+  keys.forEach(k=>_plGanttCollapsed[k]=true);
+  buildPlannerGantt();
+}
 
 function buildPlannerGantt(){
   const grid=document.getElementById('planner-grid');
@@ -440,8 +455,8 @@ function buildPlannerGantt(){
   const controlsHTML=`<div class="gantt-controls" style="margin-bottom:10px;">
     <div class="gantt-control-item"><label>🔍 Zoom tiempo</label><input type="range" min="6" max="50" step="1" value="${dayWidth}" oninput="setPlGanttDayWidth(this.value)"></div>
     <div class="gantt-control-item"><label>↕ Alto filas</label><div class="gantt-vslider-wrap"><input type="range" min="26" max="60" step="2" value="${rowHeight}" oninput="setPlGanttRowHeight(this.value)"></div></div>
-    <button class="btn" style="font-size:10px;padding:3px 8px;" onclick="Object.keys(_plGanttCollapsed).forEach(k=>_plGanttCollapsed[k]=false);buildPlannerGantt()">Expandir todo</button>
-    <button class="btn" style="font-size:10px;padding:3px 8px;" onclick="groupOrder&&groupOrder.forEach(k=>_plGanttCollapsed[k]=true);buildPlannerGantt()">Colapsar todo</button>
+    <button class="btn" style="font-size:10px;padding:3px 8px;" onclick="expandAllPlGanttGroups()">Expandir todo</button>
+    <button class="btn" style="font-size:10px;padding:3px 8px;" onclick="collapseAllPlGanttGroups()">Colapsar todo</button>
   </div>`;
 
   grid.innerHTML=controlsHTML+`
