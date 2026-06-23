@@ -306,3 +306,54 @@ index 0000000..db89d17
 +  }).join('');
 +  return`<div class="card"><div class="mt-heat-row">${cellsHTML}</div></div>`;
 +}
+
+diff --git a/roadmap.md b/roadmap.md
+index 54d1e89..3511d7c 100644
+--- a/roadmap.md
++++ b/roadmap.md
+@@ -1,12 +1,43 @@
+ # QueseProduce — Roadmap de Desarrollo (Pendientes)
+-*Versión: 2.4 — 22 de junio de 2026*
++*Versión: 2.6 — 22 de junio de 2026*
+ 
+ Este documento lista exclusivamente las **tareas pendientes** y el orden de prioridad para la evolución de la plataforma.
+ Las bases (CRUD de shows, contenido digital, equipo, finanzas y hoja de ruta) están **completas y en producción**.
+ 
+ ---
+ 
+-## 🎯 Planificador (Planner): 5/5 vistas completas
++## ✅ Nueva funcionalidad: "Mi Trabajo" (Completado)
++### Qué es
++Nuevo ítem de menú lateral (segundo, justo después de Dashboard) — dashboard personal para la persona logueada: muestra de forma dinámica y visual todo su trabajo asignado (shows + contenido digital).
++
++### Decisiones de diseño (definidas)
++1. **Concepto:** Híbrido — card destacada de "próximo compromiso" + 3 stat-cards + toggle Lista / Mi carga (mini-heatmap).
++2. **Visibilidad:** todos los roles la ven en el menú.
++3. **Estado sin persona vinculada:** el ítem del menú se **oculta** directamente (no se muestra ni siquiera vacío) si el usuario logueado no tiene una `persona` con `perfilId` que matchee su `currentUser.id`.
++
++### Qué se implementó
++- **Vínculo login ↔ equipo:** `miPersonaActual()` en `js/mitrabajo.js` — `PERSONAS.find(p=>p.perfilId===currentUser.id)`.
++- **Destacado:** card con gradiente violeta mostrando el próximo show o entrega de contenido (el de fecha más próxima entre lo activo), con cuenta atrás ("Hoy" / "Mañana" / "En N días") y el rol asignado.
++- **Stats:** Esta semana / Este mes / Activo en total — calculados sobre el rango de fechas de cada asignación (mismo criterio de superposición de rango que B.5, no solo fecha puntual).
++- **Toggle "📋 Lista" / "🔥 Mi carga":** reutiliza el estilo `.pl-kanban-toggle` ya existente.
++  - **Lista:** agrupada en "Próximas 2 semanas" / "Más adelante", cards clicables que llevan al detalle (`goToShow` / `openCdDetail`).
++  - **Mi carga:** mini-heatmap de 10 semanas, misma paleta de color que Carga de Equipo (`plCargaColor`, B.5) pero para una sola persona, con indicador ✈️ si viaja esa semana.
++- **Reutilización total de B.5:** `plCargaResolveRange()` (rango de fechas de un show/contenido) y `plCargaColor()` (escala de color) se reusan sin duplicar lógica.
++- **Ningún rol queda excluido por configuración:** se agregó `"mitrabajo"` a `ROLE_DEFS` de los 7 roles (cuidando que nunca sea el primer ítem de la lista, para no romper el fallback de sección por defecto si llegara a estar oculto).
++
++### Archivos modificados
++- `js/mitrabajo.js` **(nuevo)** — módulo completo: `buildMiTrabajo`, `miPersonaActual`, `mtResolveItem`, `mtCuentaAtras`, `mtSetVista`, `mtListaHTML`, `mtCardHTML`, `mtHeatmapHTML`.
++- `js/auth.js` — `"mitrabajo"` agregado a `sections` de los 7 roles; `applyRoleRestrictions()` oculta el nav-item si `!miPersonaActual()`.
++- `js/app.js` — `TITLES.mitrabajo`, case `"mitrabajo"` en `nav()`.
++- `index.html` — nav-item "👤 Mi trabajo" (segundo en la lista), sección `#sec-mitrabajo` con contenedor `#mt-body`, script tag `js/mitrabajo.js` (después de `planner.js`, ya que reutiliza sus funciones).
++- `css/app.css` — estilos `.mt-hero`, `.mt-item-card`, `.mt-heat-row`, etc.
++
++### Pendiente / nota abierta
++- El estado vacío de "no tenés persona vinculada" también está implementado **dentro** de `buildMiTrabajo()` como respaldo defensivo (por si se accede a la sección igual), aunque en la práctica el nav-item ya está oculto antes de llegar ahí.
++
++---
++
++## ✅ Planificador (Planner): 5/5 vistas completas
+ El Planner tiene las 5 vistas planeadas implementadas (📅 Anual / 🗓 Calendario / 📊 Gantt / 🗂 Kanban / 👥 Carga de Equipo). No queda ningún objetivo de vista pendiente; ver "Mejoras Transversales" para deuda técnica y pulido menor.
+ 
+ ### 📊 Resumen de las 5 Vistas

@@ -722,7 +722,6 @@ function plGanttBarClick(e) {
     try { const raw = el.dataset.ganttFields; if (raw) fields = JSON.parse(raw.replace(/&quot;/g, '"')); } catch(e) {}
     const fieldOrder = ['fechaPreproduccion', 'fechaProduccion', 'fecha'];
     const fieldLabels = { fechaPreproduccion: '📋 Inicio preproducción', fechaProduccion: '🎬 Inicio producción', fecha: '🎤 Fecha del show' };
-    const targetField = el.dataset.ganttTarget || 'fecha';
     fieldOrder.forEach(key => {
       if (fields[key] !== undefined) {
         const val = fields[key] || '';
