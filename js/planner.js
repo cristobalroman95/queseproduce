@@ -800,7 +800,8 @@ function buildPlannerCarga(){
       const c=cargaMap[p.id][per.key];
       const col=plCargaColor(c.count);
       const tip=c.items.length?c.items.join(', '):'Sin carga asignada';
-      return`<td class="pl-carga-cell ${per.isToday?'pl-carga-col-today':''}" style="background:${col.bg};color:${col.txt};${c.count?'cursor:pointer':''}" title="${tip.replace(/"/g,'&quot;')}" ${c.count?`onclick="plCargaDrilldown(event,'${p.nombre.replace(/'/g,"\\'")}','${per.label}',${JSON.stringify(c.items).replace(/'/g,"\\'")})"`:''} >${c.count||''}${c.viaja?` <span class="pl-carga-viaje" title="Viaja">✈️</span>`:''}</td>`;
+      const drillAttrs=c.count?` data-drill="1" data-persona="${p.nombre.replace(/"/g,'&quot;')}" data-periodo="${per.label.replace(/"/g,'&quot;')}" data-items="${btoa(unescape(encodeURIComponent(JSON.stringify(c.items))))}"`:'';
+      return`<td class="pl-carga-cell ${per.isToday?'pl-carga-col-today':''}" style="background:${col.bg};color:${col.txt};${c.count?'cursor:pointer':''}" title="${tip.replace(/"/g,'&quot;')}"${drillAttrs}>${c.count||''}${c.viaja?` <span class="pl-carga-viaje" title="Viaja">✈️</span>`:''}</td>`;
     }).join('');
     return`<tr><td class="pl-carga-td-persona"><div class="pl-carga-persona-row">${personaAvatarHTML(p,'pl-carga-av')}<span>${p.nombre}</span></div></td>${cells}</tr>`;
   }).join('');
@@ -811,10 +812,16 @@ function buildPlannerCarga(){
   </div>`;
 
   grid.innerHTML=toggleHTML+`<div class="pl-carga-wrap"><table class="pl-carga-table"><thead><tr><th class="pl-carga-th-persona">Persona</th>${headCols}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+  grid.querySelectorAll('td[data-drill]').forEach(td=>td.addEventListener('click',plCargaDrilldown));
 }
 
 // ── DRILL-DOWN CARGA DE EQUIPO ──
-function plCargaDrilldown(e, persona, periodo, items){
+function plCargaDrilldown(e){
+  const td=e.currentTarget;
+  const persona=td.dataset.persona;
+  const periodo=td.dataset.periodo;
+  let items=[];
+  try{ items=JSON.parse(decodeURIComponent(escape(atob(td.dataset.items)))); }catch(err){ return; }
   e.stopPropagation();
   const prev=document.getElementById('pl-carga-modal'); if(prev)prev.remove();
   const overlay=document.createElement('div');
