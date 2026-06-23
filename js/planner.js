@@ -88,8 +88,10 @@ function _plRangoEnFiltro(ini, fin) {
 }
 function _plShowPasaFiltros(s) {
   if (plFiltroEstados.length && !plFiltroEstados.includes(s.estado || 'Tentativo')) return false;
-  if (!_plFechaEnRango(s.fecha)) return false;
-  return true;
+  // Pass if ANY date of the show falls in the range filter
+  const allDates = [s.fechaPreproduccion, s.fechaProduccion, s.fecha, ...(s.fechasExtra||[]).map(fe=>fe.fecha)].filter(Boolean);
+  if (!allDates.length) return !plFiltroFechaIni && !plFiltroFechaFin;
+  return allDates.some(d => _plFechaEnRango(d));
 }
 function _plContPasaFiltros(c) {
   if (plFiltroEstados.length && !plFiltroEstados.includes(c.estado)) return false;
@@ -170,24 +172,41 @@ function buildPlanner() {
   const contFilter = plActiveFilter === 'todos' || plActiveFilter === 'contenido';
   grid.innerHTML = MESES.map((mes, mi) => {
     const mShows = showFilter ? SHOWS.map((s, realIdx) => ({ s, realIdx })).filter(o => {
-      if (!o.s.fecha) return false;
       if (!_plShowPasaFiltros(o.s)) return false;
-      return parseInt(o.s.fecha.split("-")[1]) === mi + 1;
+      // include if any date (prepro, pro, show, extras) falls in this month
+      const dates = [o.s.fechaPreproduccion, o.s.fechaProduccion, o.s.fecha, ...(o.s.fechasExtra||[]).map(fe=>fe.fecha)].filter(Boolean);
+      return dates.some(d => parseInt(d.split("-")[1]) === mi + 1);
     }) : [];
     const mCont = contFilter ? (typeof CONTENIDO !== 'undefined' ? CONTENIDO : []).filter(c => {
       if (!c.fecha) return false;
       if (!_plContPasaFiltros(c)) return false;
       return parseInt(c.fecha.split("-")[1]) === mi + 1;
     }) : [];
-    const combined = [...mShows.map(o => ({ type: 'show', day: parseInt(o.s.fecha.split("-")[2]), data: o })),
+    // Expand shows to one entry per date that falls this month
+    const expandedShows = [];
+    mShows.forEach(o => {
+      const { s, realIdx } = o;
+      const addEntry = (dateStr, icon, note) => {
+        if (!dateStr) return;
+        if (parseInt(dateStr.split("-")[1]) !== mi + 1) return;
+        expandedShows.push({ type: 'show', day: parseInt(dateStr.split("-")[2]), data: { s, realIdx, dateStr, icon, note } });
+      };
+      if (s.fechaPreproduccion) addEntry(s.fechaPreproduccion, '📋', 'Inicio preproducción');
+      if (s.fechaProduccion) addEntry(s.fechaProduccion, '🎬', 'Inicio producción');
+      if (s.fecha) addEntry(s.fecha, '🎤', null);
+      (s.fechasExtra||[]).forEach((fe,feIdx)=>{ if(fe.fecha) addEntry(fe.fecha,'📅', fe.nota||('Función '+(feIdx+2))); });
+    });
+    const combined = [...expandedShows,
       ...mCont.map(c => ({ type: 'content', day: parseInt(c.fecha.split("-")[2]), data: c }))
     ].sort((a, b) => a.day - b.day);
     const inner = combined.length ? combined.map(entry => {
       if (entry.type === 'show') {
-        const { s, realIdx } = entry.data;
+        const { s, realIdx, dateStr, icon, note } = entry.data;
         const c = showColor(s.tipo, s.estado);
-        const dia = s.fecha ? s.fecha.split("-")[2] : "??";
-        return `<div class="cal-show" style="background:${c.bg};color:${c.txt}" onclick="goToShow(${realIdx})" title="Ver ${s.nombre.replace(/"/g, '&quot;')}"><div class="cs-date">🎤 Día ${dia}</div><div class="cs-name">${s.nombre}</div></div>`;
+        const dia = dateStr ? dateStr.split("-")[2] : "??";
+        const nameDisplay = note ? `<span style="font-size:9px;opacity:0.75;">${note}</span><br>${s.nombre}` : s.nombre;
+        const bgOpacity = icon === '📋' ? '55' : icon === '🎬' ? '99' : '';
+        return `<div class="cal-show" style="background:${c.bg}${bgOpacity};color:${c.txt};${icon!=='🎤'?'border:1px dashed '+c.txt+'88;':''}" onclick="goToShow(${realIdx})" title="${icon} ${note||s.nombre} · ${s.nombre.replace(/"/g, '&quot;')}"><div class="cs-date">${icon} Día ${dia}</div><div class="cs-name">${nameDisplay}</div></div>`;
       } else {
         const item = entry.data;
         const dia = item.fecha ? item.fecha.split("-")[2] : "??";
@@ -233,11 +252,19 @@ function buildPlannerCalendario() {
   };
   if (showFilter) {
     SHOWS.forEach((s, realIdx) => {
-      if (!s.fecha) return;
       if (!_plShowPasaFiltros(s)) return;
-      if (parseInt(s.fecha.slice(5, 7)) === calMonth + 1 && parseInt(s.fecha.slice(0, 4)) === calYear) {
-        addToDay(s.fecha, { type: 'show', data: { s, realIdx } });
-      }
+      const addShowDay = (dateStr, opts) => {
+        if (!dateStr) return;
+        if (parseInt(dateStr.slice(5, 7)) === calMonth + 1 && parseInt(dateStr.slice(0, 4)) === calYear) {
+          addToDay(dateStr, { type: 'show', data: { s, realIdx, ...opts } });
+        }
+      };
+      if (s.fechaPreproduccion) addShowDay(s.fechaPreproduccion, { subtype: 'prepro' });
+      if (s.fechaProduccion) addShowDay(s.fechaProduccion, { subtype: 'pro' });
+      if (s.fecha) addShowDay(s.fecha, { subtype: 'show' });
+      (s.fechasExtra || []).forEach((fe, feIdx) => {
+        if (fe.fecha) addShowDay(fe.fecha, { subtype: 'extra', feNota: fe.nota || ('Función ' + (feIdx + 2)) });
+      });
     });
   }
   if (contFilter && typeof CONTENIDO !== 'undefined') {
@@ -260,9 +287,16 @@ function buildPlannerCalendario() {
 
     const chipsVisible = entries.slice(0, 3).map(entry => {
       if (entry.type === 'show') {
-        const { s, realIdx } = entry.data;
+        const { s, realIdx, subtype, feNota } = entry.data;
         const c = showColor(s.tipo, s.estado);
-        const label = (s.nombre || '').length > 18 ? s.nombre.slice(0, 17) + '…' : s.nombre;
+        const label = (s.nombre || '').length > 16 ? s.nombre.slice(0, 15) + '…' : s.nombre;
+        if (subtype === 'prepro') {
+          return `<div class="cal-chip cal-chip-show" style="background:${c.bg}55;color:${c.txt};border:1px dashed ${c.txt}55;font-style:italic;" onclick="goToShow(${realIdx})" title="📋 Inicio preproducción · ${s.nombre.replace(/"/g, '&quot;')}">📋 ${label}</div>`;
+        } else if (subtype === 'pro') {
+          return `<div class="cal-chip cal-chip-show" style="background:${c.bg}99;color:${c.txt};border:1px solid ${c.txt}55;" onclick="goToShow(${realIdx})" title="🎬 Inicio producción · ${s.nombre.replace(/"/g, '&quot;')}">🎬 ${label}</div>`;
+        } else if (subtype === 'extra') {
+          return `<div class="cal-chip cal-chip-show" style="background:${c.bg};color:${c.txt};border:2px dashed ${c.txt};" onclick="goToShow(${realIdx})" title="📅 ${feNota} · ${s.nombre.replace(/"/g, '&quot;')}">📅 ${(feNota||'').length>14?feNota.slice(0,13)+'…':feNota}</div>`;
+        }
         return `<div class="cal-chip cal-chip-show" style="background:${c.bg};color:${c.txt};" onclick="goToShow(${realIdx})" title="${s.nombre.replace(/"/g, '&quot;')}">🎤 ${label}</div>`;
       } else {
         const item = entry.data;
@@ -372,8 +406,19 @@ function buildPlannerGantt() {
     SHOWS.forEach((s, realIdx) => {
       if (!s.fecha) return;
       if (!_plShowPasaFiltros(s)) return;
-      const d = new Date(s.fecha + 'T12:00:00');
-      resolved.push({ kind: 'show', realIdx, s, ini: d, fin: d, label: s.nombre, color: showGanttColor(s.tipo, s.estado) });
+      const showDate = new Date(s.fecha + 'T12:00:00');
+      const proDate = s.fechaProduccion ? new Date(s.fechaProduccion + 'T12:00:00') : null;
+      const preproDate = s.fechaPreproduccion ? new Date(s.fechaPreproduccion + 'T12:00:00') : null;
+      // ini para rango de Gantt = la fecha más temprana disponible
+      const iniRange = preproDate || proDate || showDate;
+      const hasPrep = !!(preproDate || proDate);
+      resolved.push({ kind: 'show', realIdx, s, ini: iniRange, fin: showDate, label: s.nombre, color: showGanttColor(s.tipo, s.estado), showDate, proDate, preproDate, hasPrep });
+      // Fechas extra del mismo show
+      (s.fechasExtra || []).forEach((fe, feIdx) => {
+        if (!fe.fecha) return;
+        const feDate = new Date(fe.fecha + 'T12:00:00');
+        resolved.push({ kind: 'show', realIdx, s, ini: feDate, fin: feDate, label: s.nombre + (fe.nota ? ' · ' + fe.nota : ' · Función ' + (feIdx + 2)), color: showGanttColor(s.tipo, s.estado), showDate: feDate, proDate: null, preproDate: null, hasPrep: false, esExtra: true, feNota: fe.nota || ('Función ' + (feIdx + 2)) });
+      });
     });
   }
   if (contFilter && typeof CONTENIDO !== 'undefined') {
@@ -406,7 +451,7 @@ function buildPlannerGantt() {
     let key, label;
     if (r.kind === 'show') {
       key = 'show-' + r.realIdx;
-      label = '🎤 ' + r.s.nombre;
+      label = '🎤 ' + r.s.nombre + ((r.s.fechasExtra||[]).length ? ' (+' + r.s.fechasExtra.length + ')' : '');
     } else {
       const idx = r.it.showIdx;
       key = idx != null ? ('show-' + idx) : 'sin-show';
@@ -511,13 +556,53 @@ function buildPlannerGantt() {
       const barH = rowHeight - Math.max(8, rowHeight * 0.36);
 
       if (row.kind === 'show') {
-        const offsetDays = Math.round((row.ini - minDate) / (1000 * 60 * 60 * 24));
-        const left = offsetDays * dayWidth + 2;
-        const width = Math.max(dayWidth - 4, 8);
         const c = showColor(row.s.tipo, row.s.estado);
-        labelRowsHTML.push(`<div onclick="goToShow(${row.realIdx})" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight < 34 ? '10px' : '11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${row.s.nombre}">🎤 ${row.s.nombre}</div>`);
-        const showBarData = canEditGantt ? ` data-gantt-edit="show" data-gantt-idx="${row.realIdx}" data-gantt-fecha="${row.s.fecha}" data-gantt-nombre="${row.s.nombre.replace(/"/g, '&quot;')}"` : '';
-        barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'} title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)} ${canEditGantt ? '· Clic para editar fecha' : ''}"${showBarData} style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px solid ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
+        const rowLabel = row.esExtra ? `📅 ${row.feNota}` : `🎤 ${row.s.nombre}`;
+        const rowTitle = row.esExtra ? `${row.s.nombre} · ${row.feNota}` : row.s.nombre;
+        labelRowsHTML.push(`<div onclick="goToShow(${row.realIdx})" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight < 34 ? '10px' : '11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${rowTitle}">${rowLabel}</div>`);
+
+        if (row.esExtra) {
+          // Función extra: barra puntual simple
+          const offsetDays = Math.round((row.showDate - minDate) / (1000 * 60 * 60 * 24));
+          const left = offsetDays * dayWidth + 2;
+          const width = Math.max(dayWidth - 4, 8);
+          barsHTML.push(`<div onclick="goToShow(${row.realIdx})" title="📅 ${row.feNota} · ${fmtDate(row.s.fecha)}" style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px dashed ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.2);">📅</div>`);
+        } else if (row.hasPrep) {
+          // Tiene fechas de preproducción/producción — barras encadenadas
+          const color = c.bg;
+          const txtColor = c.txt;
+          const showFields = {};
+          if (row.s.fechaPreproduccion) showFields.fechaPreproduccion = row.s.fechaPreproduccion;
+          if (row.s.fechaProduccion) showFields.fechaProduccion = row.s.fechaProduccion;
+          if (row.s.fecha) showFields.fecha = row.s.fecha;
+          const fieldsJSON = JSON.stringify(showFields).replace(/"/g, '&quot;');
+          const showBarData = canEditGantt ? ` data-gantt-edit="show-multi" data-gantt-idx="${row.realIdx}" data-gantt-fields='${fieldsJSON}' data-gantt-nombre="${row.s.nombre.replace(/"/g, '&quot;')}"` : '';
+
+          if (row.preproDate) {
+            const endPrepro = row.proDate || row.showDate;
+            const preproOff = Math.round((row.preproDate - minDate) / (1000 * 60 * 60 * 24));
+            const preproDur = Math.max(Math.round((endPrepro - row.preproDate) / (1000 * 60 * 60 * 24)), 1);
+            barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'}${showBarData} title="📋 Preproducción: ${fmtDate(row.s.fechaPreproduccion)} → ${fmtDate((row.proDate||row.showDate).toISOString().slice(0,10))} ${canEditGantt ? '· Clic para editar fechas' : ''}" style="position:absolute;left:${preproOff * dayWidth + 2}px;top:${top}px;width:${Math.max(preproDur * dayWidth - 2, 6)}px;height:${barH}px;background:repeating-linear-gradient(135deg,${color}55 0px,${color}55 4px,${color}22 4px,${color}22 8px);border:1px solid ${color}88;border-radius:6px 0 0 6px;cursor:pointer;box-sizing:border-box;"></div>`);
+          }
+          if (row.proDate) {
+            const proOff = Math.round((row.proDate - minDate) / (1000 * 60 * 60 * 24));
+            const proDur = Math.max(Math.round((row.showDate - row.proDate) / (1000 * 60 * 60 * 24)), 1);
+            const proW = Math.max(proDur * dayWidth - 2, 6);
+            barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'}${showBarData} title="🎬 Producción: ${fmtDate(row.s.fechaProduccion)} → ${fmtDate(row.s.fecha)} ${canEditGantt ? '· Clic para editar fechas' : ''}" style="position:absolute;left:${proOff * dayWidth}px;top:${top}px;width:${proW}px;height:${barH}px;background:${color};opacity:0.75;border:1px solid ${txtColor}55;border-radius:${row.preproDate ? '0' : '6px'} 0 0 ${row.preproDate ? '0' : '6px'};cursor:pointer;"></div>`);
+          }
+          // Punto del show
+          const showOff = Math.round((row.showDate - minDate) / (1000 * 60 * 60 * 24));
+          const showLeft = showOff * dayWidth + 2;
+          const showW = Math.max(dayWidth - 4, 8);
+          barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'}${showBarData} title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)} ${canEditGantt ? '· Clic para editar fechas' : ''}" style="position:absolute;left:${showLeft}px;top:${top}px;width:${showW}px;height:${barH}px;background:${color};border:2px solid ${txtColor};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${txtColor};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
+        } else {
+          // Sin fechas de prepro — barra puntual simple (comportamiento original)
+          const offsetDays = Math.round((row.showDate - minDate) / (1000 * 60 * 60 * 24));
+          const left = offsetDays * dayWidth + 2;
+          const width = Math.max(dayWidth - 4, 8);
+          const showBarData = canEditGantt ? ` data-gantt-edit="show" data-gantt-idx="${row.realIdx}" data-gantt-fecha="${row.s.fecha}" data-gantt-nombre="${row.s.nombre.replace(/"/g, '&quot;')}"` : '';
+          barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'} title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)} ${canEditGantt ? '· Clic para editar fecha' : ''}"${showBarData} style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px solid ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
+        }
       } else {
         // ── CONTENIDO ──
         labelRowsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight < 34 ? '10px' : '11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${row.it.nombre}">${row.it.nombre}</div>`);
@@ -592,8 +677,11 @@ function buildPlannerGantt() {
   </div>
   <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:10px;color:#9690C2;align-items:center;">
     <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:10px;border-radius:3px;border:2px solid #085041;background:#E1F5EE;display:inline-block;font-size:8px;text-align:center;">🎤</span>Show (puntual)</span>
-    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#9690C255 0px,#9690C255 4px,#9690C222 4px,#9690C222 8px);border:1px solid #9690C288;display:inline-block;"></span>Preproducción</span>
-    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#9690C2;display:inline-block;"></span>Producción</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#E1F5EE55 0px,#E1F5EE55 4px,#E1F5EE22 4px,#E1F5EE22 8px);border:1px solid #08504188;display:inline-block;"></span>Preproducción show</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#E1F5EE;opacity:0.75;display:inline-block;border:1px solid #08504155;"></span>Producción show</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:10px;border-radius:3px;border:2px dashed #085041;background:#E1F5EE;display:inline-block;font-size:8px;text-align:center;">📅</span>Función extra</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#9690C255 0px,#9690C255 4px,#9690C222 4px,#9690C222 8px);border:1px solid #9690C288;display:inline-block;"></span>Preproducción contenido</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#9690C2;display:inline-block;"></span>Producción contenido</span>
   </div>`;
   // Bind event listeners a las barras editables
   grid.querySelectorAll('[data-gantt-edit]').forEach(el => el.addEventListener('click', plGanttBarClick));
@@ -620,14 +708,33 @@ function plGanttBarClick(e) {
   let focusId = '';
 
   if (tipo === 'show') {
-    // Show: solo un campo
+    // Show: solo un campo (sin prepro/pro)
     const fechaActual = el.dataset.ganttFecha || '';
     fieldsHTML = `
       <div class="pl-gantt-dp-field">
-        <label class="pl-gantt-dp-label">Fecha del show</label>
+        <label class="pl-gantt-dp-label">🎤 Fecha del show</label>
         <input id="pl-gantt-dp-input-fecha" type="date" class="pl-gantt-dp-input" value="${fechaActual}">
       </div>`;
     focusId = 'pl-gantt-dp-input-fecha';
+  } else if (tipo === 'show-multi') {
+    // Show con fechas de prepro/pro
+    let fields = {};
+    try { const raw = el.dataset.ganttFields; if (raw) fields = JSON.parse(raw.replace(/&quot;/g, '"')); } catch(e) {}
+    const fieldOrder = ['fechaPreproduccion', 'fechaProduccion', 'fecha'];
+    const fieldLabels = { fechaPreproduccion: '📋 Inicio preproducción', fechaProduccion: '🎬 Inicio producción', fecha: '🎤 Fecha del show' };
+    const targetField = el.dataset.ganttTarget || 'fecha';
+    fieldOrder.forEach(key => {
+      if (fields[key] !== undefined) {
+        const val = fields[key] || '';
+        const isTarget = (key === targetField);
+        fieldsHTML += `
+          <div class="pl-gantt-dp-field">
+            <label class="pl-gantt-dp-label" style="${isTarget ? 'font-weight:700;color:var(--p400);' : ''}">${fieldLabels[key]}</label>
+            <input id="pl-gantt-dp-input-${key}" type="date" class="pl-gantt-dp-input" value="${val}" data-field="${key}" data-kind="show-multi">
+          </div>`;
+        if (isTarget) focusId = 'pl-gantt-dp-input-' + key;
+      }
+    });
   } else {
     // Contenido: leer las fechas del dataset
     let fields = {};
@@ -705,6 +812,37 @@ function plGanttBarClick(e) {
         if (error) { s.fecha = prev; buildPlannerGantt(); toast('⚠️ Error guardando fecha: ' + error.message); }
         else toast('✅ Fecha actualizada → ' + fmtDate(nuevaFecha));
       } catch (err) { s.fecha = prev; buildPlannerGantt(); toast('⚠️ Error de conexión'); }
+      close();
+      return;
+    }
+
+    if (tipo === 'show-multi') {
+      const idx = parseInt(el.dataset.ganttIdx);
+      const s = SHOWS[idx];
+      if (!s) { close(); return; }
+      const inputs = picker.querySelectorAll('.pl-gantt-dp-input[data-kind="show-multi"]');
+      const dbUpdate = {};
+      let changes = 0;
+      inputs.forEach(inp => {
+        const field = inp.dataset.field;
+        if (!field) return;
+        const newVal = inp.value;
+        const oldVal = s[field] || '';
+        if (newVal !== oldVal) {
+          s[field] = newVal;
+          const dbField = field === 'fechaPreproduccion' ? 'fecha_preproduccion' : field === 'fechaProduccion' ? 'fecha_produccion' : 'fecha';
+          dbUpdate[dbField] = newVal || null;
+          changes++;
+        }
+      });
+      if (changes > 0) {
+        buildPlannerGantt();
+        try {
+          const { error } = await sb.from('shows').update(dbUpdate).eq('id', s.id);
+          if (error) toast('⚠️ Error guardando fechas: ' + error.message);
+          else toast('✅ ' + changes + ' fecha' + (changes > 1 ? 's' : '') + ' actualizadas');
+        } catch (err) { toast('⚠️ Error de conexión'); }
+      } else { toast('ℹ️ Sin cambios'); }
       close();
       return;
     }
@@ -794,9 +932,14 @@ function buildPlannerKanban() {
 function plKanbanShowCard(s, realIdx, canEdit) {
   const equipo = equipoStackHTML('show', s.id, 3);
   const dragAttrs = canEdit ? `draggable="true" ondragstart="plKanbanDragStart(event,'show',${realIdx})" ondragend="plKanbanDragEnd(event)"` : '';
+  const extraFns = (s.fechasExtra||[]).filter(fe=>fe.fecha);
+  const fechasStr = s.fecha ? fmtDate(s.fecha) + (extraFns.length ? ' +'+extraFns.length+' fcn.' : '') : 'Sin fecha';
+  const preproLine = s.fechaPreproduccion ? `<div class="pl-kanban-card-meta" style="font-size:9px;color:#9690C2;">📋 prepro ${fmtDate(s.fechaPreproduccion)}</div>` : '';
+  const proLine = s.fechaProduccion ? `<div class="pl-kanban-card-meta" style="font-size:9px;color:#9690C2;">🎬 prod. ${fmtDate(s.fechaProduccion)}</div>` : '';
   return `<div class="pl-kanban-card" ${dragAttrs} onclick="goToShow(${realIdx})">
     <div class="pl-kanban-card-nombre">🎤 ${s.nombre}</div>
-    <div class="pl-kanban-card-meta"><span>${s.fecha ? fmtDate(s.fecha) : 'Sin fecha'}</span></div>
+    ${preproLine}${proLine}
+    <div class="pl-kanban-card-meta"><span>🎤 ${fechasStr}</span></div>
     <div class="pl-kanban-card-meta">${equipo}</div>
   </div>`;
 }
@@ -860,8 +1003,11 @@ function plCargaResolveRange(entityType, entityId) {
   if (entityType === 'show') {
     const s = SHOWS.find(x => String(x.id) === String(entityId));
     if (!s || !s.fecha) return null;
-    const d = new Date(s.fecha + 'T12:00:00');
-    return { ini: d, fin: d, label: '🎤 ' + s.nombre };
+    const showDate = new Date(s.fecha + 'T12:00:00');
+    const iniDate = s.fechaPreproduccion ? new Date(s.fechaPreproduccion + 'T12:00:00')
+                  : s.fechaProduccion    ? new Date(s.fechaProduccion    + 'T12:00:00')
+                  : showDate;
+    return { ini: iniDate, fin: showDate, label: '🎤 ' + s.nombre };
   }
   const it = (typeof CONTENIDO !== 'undefined' ? CONTENIDO : []).find(x => String(x.id) === String(entityId));
   if (!it) return null;

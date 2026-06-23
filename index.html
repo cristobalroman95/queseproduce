@@ -519,9 +519,14 @@
       <div class="form-grid">
         <div class="form-group"><label>Nombre del venue</label><input type="text" id="f-venue" placeholder="Teatro X"></div>
         <div class="form-group"><label>Ciudad</label><input type="text" id="f-ciudad" placeholder="Ciudad A"></div>
-        <div class="form-group"><label>Fecha</label><input type="date" id="f-fecha"></div>
+        <div class="form-group"><label>📅 Inicio preproducción</label><input type="date" id="f-fecha-prepro" title="Fecha en que arranca la preproducción del show"></div>
+        <div class="form-group"><label>🎬 Inicio producción</label><input type="date" id="f-fecha-pro" title="Fecha en que arranca la producción (montaje, ensayos, etc.)"></div>
+        <div class="form-group"><label>🎤 Fecha del show</label><input type="date" id="f-fecha"></div>
         <div class="form-group"><label>Hora inicio</label><input type="time" id="f-hora" value="20:00"></div>
       </div>
+      <div class="form-section-title">Funciones adicionales <span style="font-size:10px;font-weight:400;color:#aaa;">(mismo venue – fechas extra)</span></div>
+      <div id="f-fechas-extra-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px;"></div>
+      <button type="button" class="btn" style="font-size:11px;padding:5px 12px;" onclick="addFechaExtra()">+ Agregar fecha extra</button>
       <div class="form-section-title">Entradas & Precios</div>
       <div class="form-grid">
         <div class="form-group"><label>Aforo total</label><input type="number" id="f-aforo" placeholder="600"></div>

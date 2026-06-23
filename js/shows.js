@@ -98,6 +98,9 @@ async function loadShows(){
       ciudad:row.ciudad,
       fecha:row.fecha,
       hora:row.hora,
+      fechaPreproduccion:row.fecha_preproduccion||"",
+      fechaProduccion:row.fecha_produccion||"",
+      fechasExtra:(() => { try { return row.fechas_extra ? JSON.parse(row.fechas_extra) : []; } catch(e){ return []; } })(),
       aforo:row.aforo,
       ticket:Number(row.ticket),
       obj:Number(row.obj),
@@ -139,11 +142,17 @@ async function saveShows(){
       n:s.n,nombre:s.nombre,venue:s.venue,ciudad:s.ciudad,
       fecha:s.fecha,hora:s.hora,aforo:s.aforo,ticket:s.ticket,obj:s.obj,
       tipo:s.tipo,estado:s.estado,vendidas:s.vendidas,notas:s.notas,
+      fecha_preproduccion:s.fechaPreproduccion||null,
+      fecha_produccion:s.fechaProduccion||null,
+      fechas_extra:(s.fechasExtra&&s.fechasExtra.length)?JSON.stringify(s.fechasExtra):null,
     });
     const flattenUpdate=s=>({
       id:s.id,n:s.n,nombre:s.nombre,venue:s.venue,ciudad:s.ciudad,
       fecha:s.fecha,hora:s.hora,aforo:s.aforo,ticket:s.ticket,obj:s.obj,
       tipo:s.tipo,estado:s.estado,vendidas:s.vendidas,notas:s.notas,
+      fecha_preproduccion:s.fechaPreproduccion||null,
+      fecha_produccion:s.fechaProduccion||null,
+      fechas_extra:(s.fechasExtra&&s.fechasExtra.length)?JSON.stringify(s.fechasExtra):null,
     });
     const nuevos=SHOWS.filter(s=>!s.id);
     const existentes=SHOWS.filter(s=>s.id).map(flattenUpdate);
@@ -186,7 +195,10 @@ function buildShows(){
       <td style="padding-left:14px;color:#ccc;font-size:11px;">${s.n}</td>
       <td style="font-weight:500;"><span class="show-link">${s.nombre}</span></td>
       <td style="color:#777;">${s.venue}<br><span style="font-size:10px;color:#bbb;">${s.ciudad}</span></td>
-      <td style="font-variant-numeric:tabular-nums;">${fmtDate(s.fecha)}<br><span style="font-size:10px;color:#bbb;">${s.hora}</span></td>
+      <td style="font-variant-numeric:tabular-nums;">
+        ${s.fechaPreproduccion?`<span style="font-size:9px;color:#9690C2;display:block;">📋 prepro ${fmtDate(s.fechaPreproduccion)}</span>`:""}
+        🎤 ${fmtDate(s.fecha)}<br><span style="font-size:10px;color:#bbb;">${s.hora}${(s.fechasExtra||[]).length?" · +"+(s.fechasExtra.length)+" fcn.":""}</span>
+      </td>
       <td><span class="tipo-pill ${tipoC(s.tipo)}">${s.tipo}</span></td>
       <td>${equipoStackHTML("show",s.id,3)}</td>
       <td>${s.aforo>0?s.aforo+"<br><span style='font-size:10px;color:#bbb;'>"+Math.round(s.obj*100)+"% obj.</span>":"—"}</td>
@@ -323,8 +335,11 @@ function panelResumenHTML(s,idx){
       <h4>📍 Datos del evento</h4>
       <div class="pg">
         <div class="pf"><div class="fl">Nombre</div><div class="fv" style="font-weight:600;">${s.nombre}</div></div>
-        <div class="pf"><div class="fl">Fecha</div><div class="fv">${fmtDate(s.fecha)}</div></div>
+        ${s.fechaPreproduccion?`<div class="pf"><div class="fl">📋 Inicio preproducción</div><div class="fv">${fmtDate(s.fechaPreproduccion)}</div></div>`:""}
+        ${s.fechaProduccion?`<div class="pf"><div class="fl">🎬 Inicio producción</div><div class="fv">${fmtDate(s.fechaProduccion)}</div></div>`:""}
+        <div class="pf"><div class="fl">🎤 Fecha del show</div><div class="fv">${fmtDate(s.fecha)}</div></div>
         <div class="pf"><div class="fl">Hora</div><div class="fv">${s.hora}</div></div>
+        ${(s.fechasExtra||[]).map((fe,i)=>`<div class="pf"><div class="fl">📅 Función ${i+2}</div><div class="fv">${fmtDate(fe.fecha)} ${fe.hora||""}${fe.nota?" · "+fe.nota:""}</div></div>`).join("")}
         <div class="pf"><div class="fl">Venue</div><div class="fv">${s.venue}</div></div>
         <div class="pf"><div class="fl">Ciudad</div><div class="fv">${s.ciudad}</div></div>
         <div class="pf"><div class="fl">Estado</div><div class="fv">${estEmoji(s.estado)} ${s.estado}</div></div>
@@ -352,8 +367,11 @@ function panelInfoHTML(s,idx){
       <div class="pg">
         <div class="pf"><div class="fl">Tipo</div><div class="fv"><span class="tipo-pill ${tipoC(s.tipo)}">${s.tipo}</span></div></div>
         <div class="pf"><div class="fl">Estado</div><div class="fv">${estEmoji(s.estado)} ${s.estado}</div></div>
-        <div class="pf"><div class="fl">Fecha</div><div class="fv">${fmtDate(s.fecha)}</div></div>
+        ${s.fechaPreproduccion?`<div class="pf"><div class="fl">📋 Inicio preproducción</div><div class="fv">${fmtDate(s.fechaPreproduccion)}</div></div>`:""}
+        ${s.fechaProduccion?`<div class="pf"><div class="fl">🎬 Inicio producción</div><div class="fv">${fmtDate(s.fechaProduccion)}</div></div>`:""}
+        <div class="pf"><div class="fl">🎤 Fecha show</div><div class="fv">${fmtDate(s.fecha)}</div></div>
         <div class="pf"><div class="fl">Hora</div><div class="fv">${s.hora}</div></div>
+        ${(s.fechasExtra||[]).map((fe,i)=>`<div class="pf"><div class="fl">📅 Función ${i+2}</div><div class="fv">${fmtDate(fe.fecha)} ${fe.hora||""}${fe.nota?" · "+fe.nota:""}</div></div>`).join("")}
       </div>
     </div>
     <div class="ps"><h4>Aforo y entradas</h4>
@@ -554,8 +572,11 @@ function fullDetailResumenHTML(s,idx){
         <h3>📍 Datos del evento</h3>
         <div class="pg">
           <div class="pf"><div class="fl">Nombre</div><div class="fv" style="font-weight:600;">${s.nombre}</div></div>
-          <div class="pf"><div class="fl">Fecha</div><div class="fv">${fmtDate(s.fecha)}</div></div>
+          ${s.fechaPreproduccion?`<div class="pf"><div class="fl">📋 Inicio preproducción</div><div class="fv">${fmtDate(s.fechaPreproduccion)}</div></div>`:""}
+          ${s.fechaProduccion?`<div class="pf"><div class="fl">🎬 Inicio producción</div><div class="fv">${fmtDate(s.fechaProduccion)}</div></div>`:""}
+          <div class="pf"><div class="fl">🎤 Fecha del show</div><div class="fv">${fmtDate(s.fecha)}</div></div>
           <div class="pf"><div class="fl">Hora</div><div class="fv">${s.hora}</div></div>
+          ${(s.fechasExtra||[]).map((fe,i)=>`<div class="pf"><div class="fl">📅 Función ${i+2}</div><div class="fv">${fmtDate(fe.fecha)} ${fe.hora||""}${fe.nota?" · "+fe.nota:""}</div></div>`).join("")}
           <div class="pf"><div class="fl">Venue</div><div class="fv">${s.venue}</div></div>
           <div class="pf"><div class="fl">Ciudad</div><div class="fv">${s.ciudad}</div></div>
           <div class="pf"><div class="fl">Estado</div><div class="fv">${estEmoji(s.estado)} ${s.estado}</div></div>
@@ -587,8 +608,11 @@ function fullDetailInfoHTML(s,idx){
         <div class="pg">
           <div class="pf"><div class="fl">Tipo</div><div class="fv"><span class="tipo-pill ${tipoC(s.tipo)}">${s.tipo}</span></div></div>
           <div class="pf"><div class="fl">Estado</div><div class="fv">${estEmoji(s.estado)} ${s.estado}</div></div>
-          <div class="pf"><div class="fl">Fecha</div><div class="fv">${fmtDate(s.fecha)}</div></div>
+          ${s.fechaPreproduccion?`<div class="pf"><div class="fl">📋 Inicio preproducción</div><div class="fv">${fmtDate(s.fechaPreproduccion)}</div></div>`:""}
+          ${s.fechaProduccion?`<div class="pf"><div class="fl">🎬 Inicio producción</div><div class="fv">${fmtDate(s.fechaProduccion)}</div></div>`:""}
+          <div class="pf"><div class="fl">🎤 Fecha show</div><div class="fv">${fmtDate(s.fecha)}</div></div>
           <div class="pf"><div class="fl">Hora</div><div class="fv">${s.hora}</div></div>
+          ${(s.fechasExtra||[]).map((fe,i)=>`<div class="pf"><div class="fl">📅 Función ${i+2}</div><div class="fv">${fmtDate(fe.fecha)} ${fe.hora||""}${fe.nota?" · "+fe.nota:""}</div></div>`).join("")}
           <div class="pf"><div class="fl">Venue</div><div class="fv">${s.venue}</div></div>
           <div class="pf"><div class="fl">Ciudad</div><div class="fv">${s.ciudad}</div></div>
         </div>
@@ -725,8 +749,11 @@ function openEditShow(idx){
   document.getElementById("f-estado").value=s.estado||"Tentativo";
   document.getElementById("f-venue").value=s.venue||"";
   document.getElementById("f-ciudad").value=s.ciudad||"";
+  document.getElementById("f-fecha-prepro").value=s.fechaPreproduccion||"";
+  document.getElementById("f-fecha-pro").value=s.fechaProduccion||"";
   document.getElementById("f-fecha").value=s.fecha||"";
   document.getElementById("f-hora").value=s.hora||"20:00";
+  renderFechasExtraForm(s.fechasExtra||[]);
   document.getElementById("f-aforo").value=s.aforo||"";
   document.getElementById("f-obj").value=s.obj||"";
   document.getElementById("f-ticket").value=s.ticket||"";
@@ -736,7 +763,56 @@ function openEditShow(idx){
   if(db)db.style.display=(currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit)?"block":"none";
   document.getElementById("modal-overlay").classList.add("open");
 }
-function clearForm(){["f-nombre","f-venue","f-ciudad","f-fecha","f-aforo","f-obj","f-ticket","f-vendidas","f-notas"].forEach(id=>document.getElementById(id).value="");document.getElementById("f-hora").value="20:00";}
+function clearForm(){
+  ["f-nombre","f-venue","f-ciudad","f-fecha-prepro","f-fecha-pro","f-fecha","f-aforo","f-obj","f-ticket","f-vendidas","f-notas"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("f-hora").value="20:00";
+  renderFechasExtraForm([]);
+}
+
+// ── FECHAS EXTRA ──
+function renderFechasExtraForm(arr){
+  const list=document.getElementById("f-fechas-extra-list");
+  if(!list)return;
+  list.innerHTML=(arr||[]).map((fe,i)=>`
+    <div style="display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.04);border:0.5px solid var(--border-soft);border-radius:7px;padding:8px 10px;">
+      <div style="flex:1;">
+        <label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">📅 Fecha extra ${i+1}</label>
+        <input type="date" class="fe-fecha" value="${fe.fecha||""}" style="width:100%;padding:5px 8px;border:0.5px solid var(--border-soft);border-radius:5px;background:var(--surface1);color:#E4E1F7;font-size:12px;">
+      </div>
+      <div style="flex:1;">
+        <label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">🕐 Hora</label>
+        <input type="time" class="fe-hora" value="${fe.hora||"20:00"}" style="width:100%;padding:5px 8px;border:0.5px solid var(--border-soft);border-radius:5px;background:var(--surface1);color:#E4E1F7;font-size:12px;">
+      </div>
+      <div style="flex:2;">
+        <label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Nota (opcional)</label>
+        <input type="text" class="fe-nota" value="${fe.nota||""}" placeholder="Ej: 2ª función" style="width:100%;padding:5px 8px;border:0.5px solid var(--border-soft);border-radius:5px;background:var(--surface1);color:#E4E1F7;font-size:12px;">
+      </div>
+      <button type="button" onclick="removeFechaExtra(${i})" style="background:none;border:none;color:#d44;font-size:16px;cursor:pointer;padding:4px 6px;align-self:flex-end;margin-bottom:2px;" title="Eliminar">✕</button>
+    </div>`).join("");
+}
+function _getFechasExtraFromForm(){
+  const list=document.getElementById("f-fechas-extra-list");
+  if(!list)return[];
+  const rows=list.querySelectorAll(".fe-fecha");
+  const horas=list.querySelectorAll(".fe-hora");
+  const notas=list.querySelectorAll(".fe-nota");
+  const result=[];
+  rows.forEach((r,i)=>{
+    const fecha=r.value;
+    if(fecha)result.push({fecha,hora:horas[i]?.value||"20:00",nota:notas[i]?.value||""});
+  });
+  return result;
+}
+function addFechaExtra(){
+  const cur=_getFechasExtraFromForm();
+  cur.push({fecha:"",hora:"20:00",nota:""});
+  renderFechasExtraForm(cur);
+}
+function removeFechaExtra(i){
+  const cur=_getFechasExtraFromForm();
+  cur.splice(i,1);
+  renderFechasExtraForm(cur);
+}
 function closeModal(){document.getElementById("modal-overlay").classList.remove("open");}
 function closeModalOvl(e){if(e.target===document.getElementById("modal-overlay"))closeModal();}
 async function deleteShow(){
@@ -778,7 +854,10 @@ function saveShow(){
   const show={
     nombre,tipo:document.getElementById("f-tipo").value,estado:document.getElementById("f-estado").value,
     venue:document.getElementById("f-venue").value||"Por confirmar",ciudad:document.getElementById("f-ciudad").value||"Ciudad A",
+    fechaPreproduccion:document.getElementById("f-fecha-prepro").value||"",
+    fechaProduccion:document.getElementById("f-fecha-pro").value||"",
     fecha:document.getElementById("f-fecha").value,hora:document.getElementById("f-hora").value||"20:00",
+    fechasExtra:_getFechasExtraFromForm(),
     aforo:parseInt(document.getElementById("f-aforo").value)||0,
     obj:parseFloat(document.getElementById("f-obj").value)||0.85,
     ticket:parseInt(document.getElementById("f-ticket").value)||0,
@@ -793,6 +872,7 @@ function saveShow(){
     show.presupuesto=SHOWS[editingIdx].presupuesto;
     show.invitados=SHOWS[editingIdx].invitados||[];
     show.cierre=SHOWS[editingIdx].cierre||defaultCierre();
+    // fechasExtra ya viene del form; fechaPreproduccion y fechaProduccion también
     SHOWS[editingIdx]=show;
     toast("✅ Show actualizado");
   } else {

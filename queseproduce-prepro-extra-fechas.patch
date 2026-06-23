@@ -1,0 +1,559 @@
+From 066a1da67b7dec17796c5782feb5b40263ab8767 Mon Sep 17 00:00:00 2001
+From: QueseProduce <patch@queseproduce.cl>
+Date: Tue, 23 Jun 2026 03:38:09 +0000
+Subject: [PATCH] feat: fechas preproduccion/produccion en shows + funciones
+ extra consecutivas
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Agrega campos fecha_preproduccion, fecha_produccion y fechas_extra (JSON) a shows
+- Modal de show: nuevos campos 'Inicio preproducción', 'Inicio producción' y sección
+  de fechas extra (múltiples funciones en el mismo venue)
+- Planner Gantt: shows con prepro/pro muestran barras encadenadas igual que
+  contenido digital (rayada=prepro, semisólida=producción, punto=show)
+- Planner Gantt: funciones extra aparecen como filas adicionales con barra punteada
+- Planner Gantt: picker de edición soporta los 3 campos de show con prepro (show-multi)
+- Planner Calendario: chips diferenciados por subtype (📋 prepro, 🎬 prod, 🎤 show, 📅 extra)
+- Planner Anual: cada fecha del show genera su propia entrada en el mes correspondiente
+- Planner Kanban: cards muestran fecha prepro y producción si existen + contador funciones extra
+- Planner Carga de equipo: rango de show parte desde fechaPreproduccion si existe
+- _plShowPasaFiltros: filtro de rango evalúa todas las fechas del show
+- Panel/FullDetail: vistas de resumen e info muestran fechas de prepro y funciones extra
+- Tabla de shows: columna fecha muestra fecha prepro y contador de funciones extra
+
+SQL necesario (Supabase):
+  ALTER TABLE shows ADD COLUMN IF NOT EXISTS fecha_preproduccion date;
+  ALTER TABLE shows ADD COLUMN IF NOT EXISTS fecha_produccion date;
+  ALTER TABLE shows ADD COLUMN IF NOT EXISTS fechas_extra text;
+---
+ index.html    |   7 +-
+ js/planner.js | 206 ++++++++++++++++++++++++++++++++++++++++++--------
+ js/shows.js   |  92 ++++++++++++++++++++--
+ 3 files changed, 268 insertions(+), 37 deletions(-)
+
+diff --git a/index.html b/index.html
+index a64d858..3082c9f 100644
+--- a/index.html
++++ b/index.html
+@@ -519,9 +519,14 @@
+       <div class="form-grid">
+         <div class="form-group"><label>Nombre del venue</label><input type="text" id="f-venue" placeholder="Teatro X"></div>
+         <div class="form-group"><label>Ciudad</label><input type="text" id="f-ciudad" placeholder="Ciudad A"></div>
+-        <div class="form-group"><label>Fecha</label><input type="date" id="f-fecha"></div>
++        <div class="form-group"><label>📅 Inicio preproducción</label><input type="date" id="f-fecha-prepro" title="Fecha en que arranca la preproducción del show"></div>
++        <div class="form-group"><label>🎬 Inicio producción</label><input type="date" id="f-fecha-pro" title="Fecha en que arranca la producción (montaje, ensayos, etc.)"></div>
++        <div class="form-group"><label>🎤 Fecha del show</label><input type="date" id="f-fecha"></div>
+         <div class="form-group"><label>Hora inicio</label><input type="time" id="f-hora" value="20:00"></div>
+       </div>
++      <div class="form-section-title">Funciones adicionales <span style="font-size:10px;font-weight:400;color:#aaa;">(mismo venue – fechas extra)</span></div>
++      <div id="f-fechas-extra-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px;"></div>
++      <button type="button" class="btn" style="font-size:11px;padding:5px 12px;" onclick="addFechaExtra()">+ Agregar fecha extra</button>
+       <div class="form-section-title">Entradas & Precios</div>
+       <div class="form-grid">
+         <div class="form-group"><label>Aforo total</label><input type="number" id="f-aforo" placeholder="600"></div>
+diff --git a/js/planner.js b/js/planner.js
+index 67562c2..4b9f7a7 100644
+--- a/js/planner.js
++++ b/js/planner.js
+@@ -88,8 +88,10 @@ function _plRangoEnFiltro(ini, fin) {
+ }
+ function _plShowPasaFiltros(s) {
+   if (plFiltroEstados.length && !plFiltroEstados.includes(s.estado || 'Tentativo')) return false;
+-  if (!_plFechaEnRango(s.fecha)) return false;
+-  return true;
++  // Pass if ANY date of the show falls in the range filter
++  const allDates = [s.fechaPreproduccion, s.fechaProduccion, s.fecha, ...(s.fechasExtra||[]).map(fe=>fe.fecha)].filter(Boolean);
++  if (!allDates.length) return !plFiltroFechaIni && !plFiltroFechaFin;
++  return allDates.some(d => _plFechaEnRango(d));
+ }
+ function _plContPasaFiltros(c) {
+   if (plFiltroEstados.length && !plFiltroEstados.includes(c.estado)) return false;
+@@ -170,24 +172,41 @@ function buildPlanner() {
+   const contFilter = plActiveFilter === 'todos' || plActiveFilter === 'contenido';
+   grid.innerHTML = MESES.map((mes, mi) => {
+     const mShows = showFilter ? SHOWS.map((s, realIdx) => ({ s, realIdx })).filter(o => {
+-      if (!o.s.fecha) return false;
+       if (!_plShowPasaFiltros(o.s)) return false;
+-      return parseInt(o.s.fecha.split("-")[1]) === mi + 1;
++      // include if any date (prepro, pro, show, extras) falls in this month
++      const dates = [o.s.fechaPreproduccion, o.s.fechaProduccion, o.s.fecha, ...(o.s.fechasExtra||[]).map(fe=>fe.fecha)].filter(Boolean);
++      return dates.some(d => parseInt(d.split("-")[1]) === mi + 1);
+     }) : [];
+     const mCont = contFilter ? (typeof CONTENIDO !== 'undefined' ? CONTENIDO : []).filter(c => {
+       if (!c.fecha) return false;
+       if (!_plContPasaFiltros(c)) return false;
+       return parseInt(c.fecha.split("-")[1]) === mi + 1;
+     }) : [];
+-    const combined = [...mShows.map(o => ({ type: 'show', day: parseInt(o.s.fecha.split("-")[2]), data: o })),
++    // Expand shows to one entry per date that falls this month
++    const expandedShows = [];
++    mShows.forEach(o => {
++      const { s, realIdx } = o;
++      const addEntry = (dateStr, icon, note) => {
++        if (!dateStr) return;
++        if (parseInt(dateStr.split("-")[1]) !== mi + 1) return;
++        expandedShows.push({ type: 'show', day: parseInt(dateStr.split("-")[2]), data: { s, realIdx, dateStr, icon, note } });
++      };
++      if (s.fechaPreproduccion) addEntry(s.fechaPreproduccion, '📋', 'Inicio preproducción');
++      if (s.fechaProduccion) addEntry(s.fechaProduccion, '🎬', 'Inicio producción');
++      if (s.fecha) addEntry(s.fecha, '🎤', null);
++      (s.fechasExtra||[]).forEach((fe,feIdx)=>{ if(fe.fecha) addEntry(fe.fecha,'📅', fe.nota||('Función '+(feIdx+2))); });
++    });
++    const combined = [...expandedShows,
+       ...mCont.map(c => ({ type: 'content', day: parseInt(c.fecha.split("-")[2]), data: c }))
+     ].sort((a, b) => a.day - b.day);
+     const inner = combined.length ? combined.map(entry => {
+       if (entry.type === 'show') {
+-        const { s, realIdx } = entry.data;
++        const { s, realIdx, dateStr, icon, note } = entry.data;
+         const c = showColor(s.tipo, s.estado);
+-        const dia = s.fecha ? s.fecha.split("-")[2] : "??";
+-        return `<div class="cal-show" style="background:${c.bg};color:${c.txt}" onclick="goToShow(${realIdx})" title="Ver ${s.nombre.replace(/"/g, '&quot;')}"><div class="cs-date">🎤 Día ${dia}</div><div class="cs-name">${s.nombre}</div></div>`;
++        const dia = dateStr ? dateStr.split("-")[2] : "??";
++        const nameDisplay = note ? `<span style="font-size:9px;opacity:0.75;">${note}</span><br>${s.nombre}` : s.nombre;
++        const bgOpacity = icon === '📋' ? '55' : icon === '🎬' ? '99' : '';
++        return `<div class="cal-show" style="background:${c.bg}${bgOpacity};color:${c.txt};${icon!=='🎤'?'border:1px dashed '+c.txt+'88;':''}" onclick="goToShow(${realIdx})" title="${icon} ${note||s.nombre} · ${s.nombre.replace(/"/g, '&quot;')}"><div class="cs-date">${icon} Día ${dia}</div><div class="cs-name">${nameDisplay}</div></div>`;
+       } else {
+         const item = entry.data;
+         const dia = item.fecha ? item.fecha.split("-")[2] : "??";
+@@ -233,11 +252,19 @@ function buildPlannerCalendario() {
+   };
+   if (showFilter) {
+     SHOWS.forEach((s, realIdx) => {
+-      if (!s.fecha) return;
+       if (!_plShowPasaFiltros(s)) return;
+-      if (parseInt(s.fecha.slice(5, 7)) === calMonth + 1 && parseInt(s.fecha.slice(0, 4)) === calYear) {
+-        addToDay(s.fecha, { type: 'show', data: { s, realIdx } });
+-      }
++      const addShowDay = (dateStr, opts) => {
++        if (!dateStr) return;
++        if (parseInt(dateStr.slice(5, 7)) === calMonth + 1 && parseInt(dateStr.slice(0, 4)) === calYear) {
++          addToDay(dateStr, { type: 'show', data: { s, realIdx, ...opts } });
++        }
++      };
++      if (s.fechaPreproduccion) addShowDay(s.fechaPreproduccion, { subtype: 'prepro' });
++      if (s.fechaProduccion) addShowDay(s.fechaProduccion, { subtype: 'pro' });
++      if (s.fecha) addShowDay(s.fecha, { subtype: 'show' });
++      (s.fechasExtra || []).forEach((fe, feIdx) => {
++        if (fe.fecha) addShowDay(fe.fecha, { subtype: 'extra', feNota: fe.nota || ('Función ' + (feIdx + 2)) });
++      });
+     });
+   }
+   if (contFilter && typeof CONTENIDO !== 'undefined') {
+@@ -260,9 +287,16 @@ function buildPlannerCalendario() {
+ 
+     const chipsVisible = entries.slice(0, 3).map(entry => {
+       if (entry.type === 'show') {
+-        const { s, realIdx } = entry.data;
++        const { s, realIdx, subtype, feNota } = entry.data;
+         const c = showColor(s.tipo, s.estado);
+-        const label = (s.nombre || '').length > 18 ? s.nombre.slice(0, 17) + '…' : s.nombre;
++        const label = (s.nombre || '').length > 16 ? s.nombre.slice(0, 15) + '…' : s.nombre;
++        if (subtype === 'prepro') {
++          return `<div class="cal-chip cal-chip-show" style="background:${c.bg}55;color:${c.txt};border:1px dashed ${c.txt}55;font-style:italic;" onclick="goToShow(${realIdx})" title="📋 Inicio preproducción · ${s.nombre.replace(/"/g, '&quot;')}">📋 ${label}</div>`;
++        } else if (subtype === 'pro') {
++          return `<div class="cal-chip cal-chip-show" style="background:${c.bg}99;color:${c.txt};border:1px solid ${c.txt}55;" onclick="goToShow(${realIdx})" title="🎬 Inicio producción · ${s.nombre.replace(/"/g, '&quot;')}">🎬 ${label}</div>`;
++        } else if (subtype === 'extra') {
++          return `<div class="cal-chip cal-chip-show" style="background:${c.bg};color:${c.txt};border:2px dashed ${c.txt};" onclick="goToShow(${realIdx})" title="📅 ${feNota} · ${s.nombre.replace(/"/g, '&quot;')}">📅 ${(feNota||'').length>14?feNota.slice(0,13)+'…':feNota}</div>`;
++        }
+         return `<div class="cal-chip cal-chip-show" style="background:${c.bg};color:${c.txt};" onclick="goToShow(${realIdx})" title="${s.nombre.replace(/"/g, '&quot;')}">🎤 ${label}</div>`;
+       } else {
+         const item = entry.data;
+@@ -372,8 +406,19 @@ function buildPlannerGantt() {
+     SHOWS.forEach((s, realIdx) => {
+       if (!s.fecha) return;
+       if (!_plShowPasaFiltros(s)) return;
+-      const d = new Date(s.fecha + 'T12:00:00');
+-      resolved.push({ kind: 'show', realIdx, s, ini: d, fin: d, label: s.nombre, color: showGanttColor(s.tipo, s.estado) });
++      const showDate = new Date(s.fecha + 'T12:00:00');
++      const proDate = s.fechaProduccion ? new Date(s.fechaProduccion + 'T12:00:00') : null;
++      const preproDate = s.fechaPreproduccion ? new Date(s.fechaPreproduccion + 'T12:00:00') : null;
++      // ini para rango de Gantt = la fecha más temprana disponible
++      const iniRange = preproDate || proDate || showDate;
++      const hasPrep = !!(preproDate || proDate);
++      resolved.push({ kind: 'show', realIdx, s, ini: iniRange, fin: showDate, label: s.nombre, color: showGanttColor(s.tipo, s.estado), showDate, proDate, preproDate, hasPrep });
++      // Fechas extra del mismo show
++      (s.fechasExtra || []).forEach((fe, feIdx) => {
++        if (!fe.fecha) return;
++        const feDate = new Date(fe.fecha + 'T12:00:00');
++        resolved.push({ kind: 'show', realIdx, s, ini: feDate, fin: feDate, label: s.nombre + (fe.nota ? ' · ' + fe.nota : ' · Función ' + (feIdx + 2)), color: showGanttColor(s.tipo, s.estado), showDate: feDate, proDate: null, preproDate: null, hasPrep: false, esExtra: true, feNota: fe.nota || ('Función ' + (feIdx + 2)) });
++      });
+     });
+   }
+   if (contFilter && typeof CONTENIDO !== 'undefined') {
+@@ -406,7 +451,7 @@ function buildPlannerGantt() {
+     let key, label;
+     if (r.kind === 'show') {
+       key = 'show-' + r.realIdx;
+-      label = '🎤 ' + r.s.nombre;
++      label = '🎤 ' + r.s.nombre + ((r.s.fechasExtra||[]).length ? ' (+' + r.s.fechasExtra.length + ')' : '');
+     } else {
+       const idx = r.it.showIdx;
+       key = idx != null ? ('show-' + idx) : 'sin-show';
+@@ -511,13 +556,53 @@ function buildPlannerGantt() {
+       const barH = rowHeight - Math.max(8, rowHeight * 0.36);
+ 
+       if (row.kind === 'show') {
+-        const offsetDays = Math.round((row.ini - minDate) / (1000 * 60 * 60 * 24));
+-        const left = offsetDays * dayWidth + 2;
+-        const width = Math.max(dayWidth - 4, 8);
+         const c = showColor(row.s.tipo, row.s.estado);
+-        labelRowsHTML.push(`<div onclick="goToShow(${row.realIdx})" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight < 34 ? '10px' : '11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${row.s.nombre}">🎤 ${row.s.nombre}</div>`);
+-        const showBarData = canEditGantt ? ` data-gantt-edit="show" data-gantt-idx="${row.realIdx}" data-gantt-fecha="${row.s.fecha}" data-gantt-nombre="${row.s.nombre.replace(/"/g, '&quot;')}"` : '';
+-        barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'} title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)} ${canEditGantt ? '· Clic para editar fecha' : ''}"${showBarData} style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px solid ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
++        const rowLabel = row.esExtra ? `📅 ${row.feNota}` : `🎤 ${row.s.nombre}`;
++        const rowTitle = row.esExtra ? `${row.s.nombre} · ${row.feNota}` : row.s.nombre;
++        labelRowsHTML.push(`<div onclick="goToShow(${row.realIdx})" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight < 34 ? '10px' : '11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${rowTitle}">${rowLabel}</div>`);
++
++        if (row.esExtra) {
++          // Función extra: barra puntual simple
++          const offsetDays = Math.round((row.showDate - minDate) / (1000 * 60 * 60 * 24));
++          const left = offsetDays * dayWidth + 2;
++          const width = Math.max(dayWidth - 4, 8);
++          barsHTML.push(`<div onclick="goToShow(${row.realIdx})" title="📅 ${row.feNota} · ${fmtDate(row.s.fecha)}" style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px dashed ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.2);">📅</div>`);
++        } else if (row.hasPrep) {
++          // Tiene fechas de preproducción/producción — barras encadenadas
++          const color = c.bg;
++          const txtColor = c.txt;
++          const showFields = {};
++          if (row.s.fechaPreproduccion) showFields.fechaPreproduccion = row.s.fechaPreproduccion;
++          if (row.s.fechaProduccion) showFields.fechaProduccion = row.s.fechaProduccion;
++          if (row.s.fecha) showFields.fecha = row.s.fecha;
++          const fieldsJSON = JSON.stringify(showFields).replace(/"/g, '&quot;');
++          const showBarData = canEditGantt ? ` data-gantt-edit="show-multi" data-gantt-idx="${row.realIdx}" data-gantt-fields='${fieldsJSON}' data-gantt-nombre="${row.s.nombre.replace(/"/g, '&quot;')}"` : '';
++
++          if (row.preproDate) {
++            const endPrepro = row.proDate || row.showDate;
++            const preproOff = Math.round((row.preproDate - minDate) / (1000 * 60 * 60 * 24));
++            const preproDur = Math.max(Math.round((endPrepro - row.preproDate) / (1000 * 60 * 60 * 24)), 1);
++            barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'}${showBarData} title="📋 Preproducción: ${fmtDate(row.s.fechaPreproduccion)} → ${fmtDate((row.proDate||row.showDate).toISOString().slice(0,10))} ${canEditGantt ? '· Clic para editar fechas' : ''}" style="position:absolute;left:${preproOff * dayWidth + 2}px;top:${top}px;width:${Math.max(preproDur * dayWidth - 2, 6)}px;height:${barH}px;background:repeating-linear-gradient(135deg,${color}55 0px,${color}55 4px,${color}22 4px,${color}22 8px);border:1px solid ${color}88;border-radius:6px 0 0 6px;cursor:pointer;box-sizing:border-box;"></div>`);
++          }
++          if (row.proDate) {
++            const proOff = Math.round((row.proDate - minDate) / (1000 * 60 * 60 * 24));
++            const proDur = Math.max(Math.round((row.showDate - row.proDate) / (1000 * 60 * 60 * 24)), 1);
++            const proW = Math.max(proDur * dayWidth - 2, 6);
++            barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'}${showBarData} title="🎬 Producción: ${fmtDate(row.s.fechaProduccion)} → ${fmtDate(row.s.fecha)} ${canEditGantt ? '· Clic para editar fechas' : ''}" style="position:absolute;left:${proOff * dayWidth}px;top:${top}px;width:${proW}px;height:${barH}px;background:${color};opacity:0.75;border:1px solid ${txtColor}55;border-radius:${row.preproDate ? '0' : '6px'} 0 0 ${row.preproDate ? '0' : '6px'};cursor:pointer;"></div>`);
++          }
++          // Punto del show
++          const showOff = Math.round((row.showDate - minDate) / (1000 * 60 * 60 * 24));
++          const showLeft = showOff * dayWidth + 2;
++          const showW = Math.max(dayWidth - 4, 8);
++          barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'}${showBarData} title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)} ${canEditGantt ? '· Clic para editar fechas' : ''}" style="position:absolute;left:${showLeft}px;top:${top}px;width:${showW}px;height:${barH}px;background:${color};border:2px solid ${txtColor};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${txtColor};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
++        } else {
++          // Sin fechas de prepro — barra puntual simple (comportamiento original)
++          const offsetDays = Math.round((row.showDate - minDate) / (1000 * 60 * 60 * 24));
++          const left = offsetDays * dayWidth + 2;
++          const width = Math.max(dayWidth - 4, 8);
++          const showBarData = canEditGantt ? ` data-gantt-edit="show" data-gantt-idx="${row.realIdx}" data-gantt-fecha="${row.s.fecha}" data-gantt-nombre="${row.s.nombre.replace(/"/g, '&quot;')}"` : '';
++          barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'} title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)} ${canEditGantt ? '· Clic para editar fecha' : ''}"${showBarData} style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px solid ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
++        }
+       } else {
+         // ── CONTENIDO ──
+         labelRowsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight < 34 ? '10px' : '11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${row.it.nombre}">${row.it.nombre}</div>`);
+@@ -592,8 +677,11 @@ function buildPlannerGantt() {
+   </div>
+   <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:10px;color:#9690C2;align-items:center;">
+     <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:10px;border-radius:3px;border:2px solid #085041;background:#E1F5EE;display:inline-block;font-size:8px;text-align:center;">🎤</span>Show (puntual)</span>
+-    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#9690C255 0px,#9690C255 4px,#9690C222 4px,#9690C222 8px);border:1px solid #9690C288;display:inline-block;"></span>Preproducción</span>
+-    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#9690C2;display:inline-block;"></span>Producción</span>
++    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#E1F5EE55 0px,#E1F5EE55 4px,#E1F5EE22 4px,#E1F5EE22 8px);border:1px solid #08504188;display:inline-block;"></span>Preproducción show</span>
++    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#E1F5EE;opacity:0.75;display:inline-block;border:1px solid #08504155;"></span>Producción show</span>
++    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:10px;border-radius:3px;border:2px dashed #085041;background:#E1F5EE;display:inline-block;font-size:8px;text-align:center;">📅</span>Función extra</span>
++    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#9690C255 0px,#9690C255 4px,#9690C222 4px,#9690C222 8px);border:1px solid #9690C288;display:inline-block;"></span>Preproducción contenido</span>
++    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#9690C2;display:inline-block;"></span>Producción contenido</span>
+   </div>`;
+   // Bind event listeners a las barras editables
+   grid.querySelectorAll('[data-gantt-edit]').forEach(el => el.addEventListener('click', plGanttBarClick));
+@@ -620,14 +708,33 @@ function plGanttBarClick(e) {
+   let focusId = '';
+ 
+   if (tipo === 'show') {
+-    // Show: solo un campo
++    // Show: solo un campo (sin prepro/pro)
+     const fechaActual = el.dataset.ganttFecha || '';
+     fieldsHTML = `
+       <div class="pl-gantt-dp-field">
+-        <label class="pl-gantt-dp-label">Fecha del show</label>
++        <label class="pl-gantt-dp-label">🎤 Fecha del show</label>
+         <input id="pl-gantt-dp-input-fecha" type="date" class="pl-gantt-dp-input" value="${fechaActual}">
+       </div>`;
+     focusId = 'pl-gantt-dp-input-fecha';
++  } else if (tipo === 'show-multi') {
++    // Show con fechas de prepro/pro
++    let fields = {};
++    try { const raw = el.dataset.ganttFields; if (raw) fields = JSON.parse(raw.replace(/&quot;/g, '"')); } catch(e) {}
++    const fieldOrder = ['fechaPreproduccion', 'fechaProduccion', 'fecha'];
++    const fieldLabels = { fechaPreproduccion: '📋 Inicio preproducción', fechaProduccion: '🎬 Inicio producción', fecha: '🎤 Fecha del show' };
++    const targetField = el.dataset.ganttTarget || 'fecha';
++    fieldOrder.forEach(key => {
++      if (fields[key] !== undefined) {
++        const val = fields[key] || '';
++        const isTarget = (key === targetField);
++        fieldsHTML += `
++          <div class="pl-gantt-dp-field">
++            <label class="pl-gantt-dp-label" style="${isTarget ? 'font-weight:700;color:var(--p400);' : ''}">${fieldLabels[key]}</label>
++            <input id="pl-gantt-dp-input-${key}" type="date" class="pl-gantt-dp-input" value="${val}" data-field="${key}" data-kind="show-multi">
++          </div>`;
++        if (isTarget) focusId = 'pl-gantt-dp-input-' + key;
++      }
++    });
+   } else {
+     // Contenido: leer las fechas del dataset
+     let fields = {};
+@@ -709,6 +816,37 @@ function plGanttBarClick(e) {
+       return;
+     }
+ 
++    if (tipo === 'show-multi') {
++      const idx = parseInt(el.dataset.ganttIdx);
++      const s = SHOWS[idx];
++      if (!s) { close(); return; }
++      const inputs = picker.querySelectorAll('.pl-gantt-dp-input[data-kind="show-multi"]');
++      const dbUpdate = {};
++      let changes = 0;
++      inputs.forEach(inp => {
++        const field = inp.dataset.field;
++        if (!field) return;
++        const newVal = inp.value;
++        const oldVal = s[field] || '';
++        if (newVal !== oldVal) {
++          s[field] = newVal;
++          const dbField = field === 'fechaPreproduccion' ? 'fecha_preproduccion' : field === 'fechaProduccion' ? 'fecha_produccion' : 'fecha';
++          dbUpdate[dbField] = newVal || null;
++          changes++;
++        }
++      });
++      if (changes > 0) {
++        buildPlannerGantt();
++        try {
++          const { error } = await sb.from('shows').update(dbUpdate).eq('id', s.id);
++          if (error) toast('⚠️ Error guardando fechas: ' + error.message);
++          else toast('✅ ' + changes + ' fecha' + (changes > 1 ? 's' : '') + ' actualizadas');
++        } catch (err) { toast('⚠️ Error de conexión'); }
++      } else { toast('ℹ️ Sin cambios'); }
++      close();
++      return;
++    }
++
+     // ── CONTENIDO: actualizar todos los campos que hayan cambiado ──
+     const id = el.dataset.ganttId;
+     const it = (typeof CONTENIDO !== 'undefined' ? CONTENIDO : []).find(c => String(c.id) === String(id));
+@@ -794,9 +932,14 @@ function buildPlannerKanban() {
+ function plKanbanShowCard(s, realIdx, canEdit) {
+   const equipo = equipoStackHTML('show', s.id, 3);
+   const dragAttrs = canEdit ? `draggable="true" ondragstart="plKanbanDragStart(event,'show',${realIdx})" ondragend="plKanbanDragEnd(event)"` : '';
++  const extraFns = (s.fechasExtra||[]).filter(fe=>fe.fecha);
++  const fechasStr = s.fecha ? fmtDate(s.fecha) + (extraFns.length ? ' +'+extraFns.length+' fcn.' : '') : 'Sin fecha';
++  const preproLine = s.fechaPreproduccion ? `<div class="pl-kanban-card-meta" style="font-size:9px;color:#9690C2;">📋 prepro ${fmtDate(s.fechaPreproduccion)}</div>` : '';
++  const proLine = s.fechaProduccion ? `<div class="pl-kanban-card-meta" style="font-size:9px;color:#9690C2;">🎬 prod. ${fmtDate(s.fechaProduccion)}</div>` : '';
+   return `<div class="pl-kanban-card" ${dragAttrs} onclick="goToShow(${realIdx})">
+     <div class="pl-kanban-card-nombre">🎤 ${s.nombre}</div>
+-    <div class="pl-kanban-card-meta"><span>${s.fecha ? fmtDate(s.fecha) : 'Sin fecha'}</span></div>
++    ${preproLine}${proLine}
++    <div class="pl-kanban-card-meta"><span>🎤 ${fechasStr}</span></div>
+     <div class="pl-kanban-card-meta">${equipo}</div>
+   </div>`;
+ }
+@@ -860,8 +1003,11 @@ function plCargaResolveRange(entityType, entityId) {
+   if (entityType === 'show') {
+     const s = SHOWS.find(x => String(x.id) === String(entityId));
+     if (!s || !s.fecha) return null;
+-    const d = new Date(s.fecha + 'T12:00:00');
+-    return { ini: d, fin: d, label: '🎤 ' + s.nombre };
++    const showDate = new Date(s.fecha + 'T12:00:00');
++    const iniDate = s.fechaPreproduccion ? new Date(s.fechaPreproduccion + 'T12:00:00')
++                  : s.fechaProduccion    ? new Date(s.fechaProduccion    + 'T12:00:00')
++                  : showDate;
++    return { ini: iniDate, fin: showDate, label: '🎤 ' + s.nombre };
+   }
+   const it = (typeof CONTENIDO !== 'undefined' ? CONTENIDO : []).find(x => String(x.id) === String(entityId));
+   if (!it) return null;
+diff --git a/js/shows.js b/js/shows.js
+index 8716de4..e6b8f13 100644
+--- a/js/shows.js
++++ b/js/shows.js
+@@ -98,6 +98,9 @@ async function loadShows(){
+       ciudad:row.ciudad,
+       fecha:row.fecha,
+       hora:row.hora,
++      fechaPreproduccion:row.fecha_preproduccion||"",
++      fechaProduccion:row.fecha_produccion||"",
++      fechasExtra:(() => { try { return row.fechas_extra ? JSON.parse(row.fechas_extra) : []; } catch(e){ return []; } })(),
+       aforo:row.aforo,
+       ticket:Number(row.ticket),
+       obj:Number(row.obj),
+@@ -139,11 +142,17 @@ async function saveShows(){
+       n:s.n,nombre:s.nombre,venue:s.venue,ciudad:s.ciudad,
+       fecha:s.fecha,hora:s.hora,aforo:s.aforo,ticket:s.ticket,obj:s.obj,
+       tipo:s.tipo,estado:s.estado,vendidas:s.vendidas,notas:s.notas,
++      fecha_preproduccion:s.fechaPreproduccion||null,
++      fecha_produccion:s.fechaProduccion||null,
++      fechas_extra:(s.fechasExtra&&s.fechasExtra.length)?JSON.stringify(s.fechasExtra):null,
+     });
+     const flattenUpdate=s=>({
+       id:s.id,n:s.n,nombre:s.nombre,venue:s.venue,ciudad:s.ciudad,
+       fecha:s.fecha,hora:s.hora,aforo:s.aforo,ticket:s.ticket,obj:s.obj,
+       tipo:s.tipo,estado:s.estado,vendidas:s.vendidas,notas:s.notas,
++      fecha_preproduccion:s.fechaPreproduccion||null,
++      fecha_produccion:s.fechaProduccion||null,
++      fechas_extra:(s.fechasExtra&&s.fechasExtra.length)?JSON.stringify(s.fechasExtra):null,
+     });
+     const nuevos=SHOWS.filter(s=>!s.id);
+     const existentes=SHOWS.filter(s=>s.id).map(flattenUpdate);
+@@ -186,7 +195,10 @@ function buildShows(){
+       <td style="padding-left:14px;color:#ccc;font-size:11px;">${s.n}</td>
+       <td style="font-weight:500;"><span class="show-link">${s.nombre}</span></td>
+       <td style="color:#777;">${s.venue}<br><span style="font-size:10px;color:#bbb;">${s.ciudad}</span></td>
+-      <td style="font-variant-numeric:tabular-nums;">${fmtDate(s.fecha)}<br><span style="font-size:10px;color:#bbb;">${s.hora}</span></td>
++      <td style="font-variant-numeric:tabular-nums;">
++        ${s.fechaPreproduccion?`<span style="font-size:9px;color:#9690C2;display:block;">📋 prepro ${fmtDate(s.fechaPreproduccion)}</span>`:""}
++        🎤 ${fmtDate(s.fecha)}<br><span style="font-size:10px;color:#bbb;">${s.hora}${(s.fechasExtra||[]).length?" · +"+(s.fechasExtra.length)+" fcn.":""}</span>
++      </td>
+       <td><span class="tipo-pill ${tipoC(s.tipo)}">${s.tipo}</span></td>
+       <td>${equipoStackHTML("show",s.id,3)}</td>
+       <td>${s.aforo>0?s.aforo+"<br><span style='font-size:10px;color:#bbb;'>"+Math.round(s.obj*100)+"% obj.</span>":"—"}</td>
+@@ -323,8 +335,11 @@ function panelResumenHTML(s,idx){
+       <h4>📍 Datos del evento</h4>
+       <div class="pg">
+         <div class="pf"><div class="fl">Nombre</div><div class="fv" style="font-weight:600;">${s.nombre}</div></div>
+-        <div class="pf"><div class="fl">Fecha</div><div class="fv">${fmtDate(s.fecha)}</div></div>
++        ${s.fechaPreproduccion?`<div class="pf"><div class="fl">📋 Inicio preproducción</div><div class="fv">${fmtDate(s.fechaPreproduccion)}</div></div>`:""}
++        ${s.fechaProduccion?`<div class="pf"><div class="fl">🎬 Inicio producción</div><div class="fv">${fmtDate(s.fechaProduccion)}</div></div>`:""}
++        <div class="pf"><div class="fl">🎤 Fecha del show</div><div class="fv">${fmtDate(s.fecha)}</div></div>
+         <div class="pf"><div class="fl">Hora</div><div class="fv">${s.hora}</div></div>
++        ${(s.fechasExtra||[]).map((fe,i)=>`<div class="pf"><div class="fl">📅 Función ${i+2}</div><div class="fv">${fmtDate(fe.fecha)} ${fe.hora||""}${fe.nota?" · "+fe.nota:""}</div></div>`).join("")}
+         <div class="pf"><div class="fl">Venue</div><div class="fv">${s.venue}</div></div>
+         <div class="pf"><div class="fl">Ciudad</div><div class="fv">${s.ciudad}</div></div>
+         <div class="pf"><div class="fl">Estado</div><div class="fv">${estEmoji(s.estado)} ${s.estado}</div></div>
+@@ -352,8 +367,11 @@ function panelInfoHTML(s,idx){
+       <div class="pg">
+         <div class="pf"><div class="fl">Tipo</div><div class="fv"><span class="tipo-pill ${tipoC(s.tipo)}">${s.tipo}</span></div></div>
+         <div class="pf"><div class="fl">Estado</div><div class="fv">${estEmoji(s.estado)} ${s.estado}</div></div>
+-        <div class="pf"><div class="fl">Fecha</div><div class="fv">${fmtDate(s.fecha)}</div></div>
++        ${s.fechaPreproduccion?`<div class="pf"><div class="fl">📋 Inicio preproducción</div><div class="fv">${fmtDate(s.fechaPreproduccion)}</div></div>`:""}
++        ${s.fechaProduccion?`<div class="pf"><div class="fl">🎬 Inicio producción</div><div class="fv">${fmtDate(s.fechaProduccion)}</div></div>`:""}
++        <div class="pf"><div class="fl">🎤 Fecha show</div><div class="fv">${fmtDate(s.fecha)}</div></div>
+         <div class="pf"><div class="fl">Hora</div><div class="fv">${s.hora}</div></div>
++        ${(s.fechasExtra||[]).map((fe,i)=>`<div class="pf"><div class="fl">📅 Función ${i+2}</div><div class="fv">${fmtDate(fe.fecha)} ${fe.hora||""}${fe.nota?" · "+fe.nota:""}</div></div>`).join("")}
+       </div>
+     </div>
+     <div class="ps"><h4>Aforo y entradas</h4>
+@@ -554,8 +572,11 @@ function fullDetailResumenHTML(s,idx){
+         <h3>📍 Datos del evento</h3>
+         <div class="pg">
+           <div class="pf"><div class="fl">Nombre</div><div class="fv" style="font-weight:600;">${s.nombre}</div></div>
+-          <div class="pf"><div class="fl">Fecha</div><div class="fv">${fmtDate(s.fecha)}</div></div>
++          ${s.fechaPreproduccion?`<div class="pf"><div class="fl">📋 Inicio preproducción</div><div class="fv">${fmtDate(s.fechaPreproduccion)}</div></div>`:""}
++          ${s.fechaProduccion?`<div class="pf"><div class="fl">🎬 Inicio producción</div><div class="fv">${fmtDate(s.fechaProduccion)}</div></div>`:""}
++          <div class="pf"><div class="fl">🎤 Fecha del show</div><div class="fv">${fmtDate(s.fecha)}</div></div>
+           <div class="pf"><div class="fl">Hora</div><div class="fv">${s.hora}</div></div>
++          ${(s.fechasExtra||[]).map((fe,i)=>`<div class="pf"><div class="fl">📅 Función ${i+2}</div><div class="fv">${fmtDate(fe.fecha)} ${fe.hora||""}${fe.nota?" · "+fe.nota:""}</div></div>`).join("")}
+           <div class="pf"><div class="fl">Venue</div><div class="fv">${s.venue}</div></div>
+           <div class="pf"><div class="fl">Ciudad</div><div class="fv">${s.ciudad}</div></div>
+           <div class="pf"><div class="fl">Estado</div><div class="fv">${estEmoji(s.estado)} ${s.estado}</div></div>
+@@ -587,8 +608,11 @@ function fullDetailInfoHTML(s,idx){
+         <div class="pg">
+           <div class="pf"><div class="fl">Tipo</div><div class="fv"><span class="tipo-pill ${tipoC(s.tipo)}">${s.tipo}</span></div></div>
+           <div class="pf"><div class="fl">Estado</div><div class="fv">${estEmoji(s.estado)} ${s.estado}</div></div>
+-          <div class="pf"><div class="fl">Fecha</div><div class="fv">${fmtDate(s.fecha)}</div></div>
++          ${s.fechaPreproduccion?`<div class="pf"><div class="fl">📋 Inicio preproducción</div><div class="fv">${fmtDate(s.fechaPreproduccion)}</div></div>`:""}
++          ${s.fechaProduccion?`<div class="pf"><div class="fl">🎬 Inicio producción</div><div class="fv">${fmtDate(s.fechaProduccion)}</div></div>`:""}
++          <div class="pf"><div class="fl">🎤 Fecha show</div><div class="fv">${fmtDate(s.fecha)}</div></div>
+           <div class="pf"><div class="fl">Hora</div><div class="fv">${s.hora}</div></div>
++          ${(s.fechasExtra||[]).map((fe,i)=>`<div class="pf"><div class="fl">📅 Función ${i+2}</div><div class="fv">${fmtDate(fe.fecha)} ${fe.hora||""}${fe.nota?" · "+fe.nota:""}</div></div>`).join("")}
+           <div class="pf"><div class="fl">Venue</div><div class="fv">${s.venue}</div></div>
+           <div class="pf"><div class="fl">Ciudad</div><div class="fv">${s.ciudad}</div></div>
+         </div>
+@@ -725,8 +749,11 @@ function openEditShow(idx){
+   document.getElementById("f-estado").value=s.estado||"Tentativo";
+   document.getElementById("f-venue").value=s.venue||"";
+   document.getElementById("f-ciudad").value=s.ciudad||"";
++  document.getElementById("f-fecha-prepro").value=s.fechaPreproduccion||"";
++  document.getElementById("f-fecha-pro").value=s.fechaProduccion||"";
+   document.getElementById("f-fecha").value=s.fecha||"";
+   document.getElementById("f-hora").value=s.hora||"20:00";
++  renderFechasExtraForm(s.fechasExtra||[]);
+   document.getElementById("f-aforo").value=s.aforo||"";
+   document.getElementById("f-obj").value=s.obj||"";
+   document.getElementById("f-ticket").value=s.ticket||"";
+@@ -736,7 +763,56 @@ function openEditShow(idx){
+   if(db)db.style.display=(currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit)?"block":"none";
+   document.getElementById("modal-overlay").classList.add("open");
+ }
+-function clearForm(){["f-nombre","f-venue","f-ciudad","f-fecha","f-aforo","f-obj","f-ticket","f-vendidas","f-notas"].forEach(id=>document.getElementById(id).value="");document.getElementById("f-hora").value="20:00";}
++function clearForm(){
++  ["f-nombre","f-venue","f-ciudad","f-fecha-prepro","f-fecha-pro","f-fecha","f-aforo","f-obj","f-ticket","f-vendidas","f-notas"].forEach(id=>document.getElementById(id).value="");
++  document.getElementById("f-hora").value="20:00";
++  renderFechasExtraForm([]);
++}
++
++// ── FECHAS EXTRA ──
++function renderFechasExtraForm(arr){
++  const list=document.getElementById("f-fechas-extra-list");
++  if(!list)return;
++  list.innerHTML=(arr||[]).map((fe,i)=>`
++    <div style="display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.04);border:0.5px solid var(--border-soft);border-radius:7px;padding:8px 10px;">
++      <div style="flex:1;">
++        <label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">📅 Fecha extra ${i+1}</label>
++        <input type="date" class="fe-fecha" value="${fe.fecha||""}" style="width:100%;padding:5px 8px;border:0.5px solid var(--border-soft);border-radius:5px;background:var(--surface1);color:#E4E1F7;font-size:12px;">
++      </div>
++      <div style="flex:1;">
++        <label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">🕐 Hora</label>
++        <input type="time" class="fe-hora" value="${fe.hora||"20:00"}" style="width:100%;padding:5px 8px;border:0.5px solid var(--border-soft);border-radius:5px;background:var(--surface1);color:#E4E1F7;font-size:12px;">
++      </div>
++      <div style="flex:2;">
++        <label style="font-size:10px;font-weight:600;color:#888;display:block;margin-bottom:3px;">Nota (opcional)</label>
++        <input type="text" class="fe-nota" value="${fe.nota||""}" placeholder="Ej: 2ª función" style="width:100%;padding:5px 8px;border:0.5px solid var(--border-soft);border-radius:5px;background:var(--surface1);color:#E4E1F7;font-size:12px;">
++      </div>
++      <button type="button" onclick="removeFechaExtra(${i})" style="background:none;border:none;color:#d44;font-size:16px;cursor:pointer;padding:4px 6px;align-self:flex-end;margin-bottom:2px;" title="Eliminar">✕</button>
++    </div>`).join("");
++}
++function _getFechasExtraFromForm(){
++  const list=document.getElementById("f-fechas-extra-list");
++  if(!list)return[];
++  const rows=list.querySelectorAll(".fe-fecha");
++  const horas=list.querySelectorAll(".fe-hora");
++  const notas=list.querySelectorAll(".fe-nota");
++  const result=[];
++  rows.forEach((r,i)=>{
++    const fecha=r.value;
++    if(fecha)result.push({fecha,hora:horas[i]?.value||"20:00",nota:notas[i]?.value||""});
++  });
++  return result;
++}
++function addFechaExtra(){
++  const cur=_getFechasExtraFromForm();
++  cur.push({fecha:"",hora:"20:00",nota:""});
++  renderFechasExtraForm(cur);
++}
++function removeFechaExtra(i){
++  const cur=_getFechasExtraFromForm();
++  cur.splice(i,1);
++  renderFechasExtraForm(cur);
++}
+ function closeModal(){document.getElementById("modal-overlay").classList.remove("open");}
+ function closeModalOvl(e){if(e.target===document.getElementById("modal-overlay"))closeModal();}
+ async function deleteShow(){
+@@ -778,7 +854,10 @@ function saveShow(){
+   const show={
+     nombre,tipo:document.getElementById("f-tipo").value,estado:document.getElementById("f-estado").value,
+     venue:document.getElementById("f-venue").value||"Por confirmar",ciudad:document.getElementById("f-ciudad").value||"Ciudad A",
++    fechaPreproduccion:document.getElementById("f-fecha-prepro").value||"",
++    fechaProduccion:document.getElementById("f-fecha-pro").value||"",
+     fecha:document.getElementById("f-fecha").value,hora:document.getElementById("f-hora").value||"20:00",
++    fechasExtra:_getFechasExtraFromForm(),
+     aforo:parseInt(document.getElementById("f-aforo").value)||0,
+     obj:parseFloat(document.getElementById("f-obj").value)||0.85,
+     ticket:parseInt(document.getElementById("f-ticket").value)||0,
+@@ -793,6 +872,7 @@ function saveShow(){
+     show.presupuesto=SHOWS[editingIdx].presupuesto;
+     show.invitados=SHOWS[editingIdx].invitados||[];
+     show.cierre=SHOWS[editingIdx].cierre||defaultCierre();
++    // fechasExtra ya viene del form; fechaPreproduccion y fechaProduccion también
+     SHOWS[editingIdx]=show;
+     toast("✅ Show actualizado");
+   } else {
+-- 
+2.43.0
+
