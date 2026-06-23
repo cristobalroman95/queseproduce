@@ -1,0 +1,308 @@
+diff --git a/architecture.md b/architecture.md
+index 904e154..7e91244 100644
+--- a/architecture.md
++++ b/architecture.md
+@@ -28,7 +28,8 @@ QueseProduce es una **aplicación de página única (SPA)** para la gestión int
+     ├── finanzas.js   # Reportes gráficos y financieros (EECC, Flujo).
+     ├── contenido.js  # Módulo de Contenido Digital (CRUD, Kanban, Gantt).
+     ├── equipo.js     # Equipo (Personas, Asignaciones, Multimedia, Bitácora).
+-    ├── planner.js    # Planificador (vistas Anual, Calendario; dispatcher _renderPlannerView).
++    ├── planner.js    # Planificador (5 vistas: Anual, Calendario, Gantt, Kanban, Carga de Equipo; dispatcher _renderPlannerView).
++    ├── mitrabajo.js  # Dashboard personal "Mi Trabajo" (destacado + stats + toggle lista/heatmap por persona logueada).
+     └── export.js     # Exportación a CSV y descarga de Fichas.
+ ```
+ 
+@@ -39,7 +40,7 @@ QueseProduce es una **aplicación de página única (SPA)** para la gestión int
+ | `contenido_digital` | Piezas de marketing (reels, posts). | 1:N con `contenido_tasks`, `contenido_logs`, `contenido_metricas`, `media_items`. |
+ | `personas` | Miembros del equipo. | 1:N con `asignaciones` (entidad polimórfica: `show` o `contenido`). |
+ | `media_items` | Archivos multimedia. | Polimórfica: `show_id` o `contenido_id`. Almacenamiento en bucket `show-media`. |
+-| `perfiles` | Usuarios autenticados (Google). | Vinculado a `personas` vía `perfil_id` para heredar foto/nombre. |
++| `perfiles` | Usuarios autenticados (Google). | Vinculado a `personas` vía `perfil_id` para heredar foto/nombre, y para que `Mi Trabajo` identifique qué `persona` corresponde al usuario logueado (`PERSONAS.find(p=>p.perfilId===currentUser.id)`). |
+ 
+ ## 5. Patrones de Persistencia (Obligatorios)
+ Para mantener la integridad de las FK y evitar IDs huérfanos, se usa un patrón específico según el tipo de relación:
+@@ -62,7 +63,7 @@ Para mantener la integridad de las FK y evitar IDs huérfanos, se usa un patrón
+ 
+ ## 6. Seguridad y Accesos
+ - **Autenticación:** Solo Google OAuth. Los usuarios nuevos se crean automáticamente vía trigger en Supabase con rol `invitado`.
+-- **Autorización (Frontend):** El archivo `ROLE_DEFS` en `auth.js` controla qué secciones y botones ve cada rol (`programador`, `productor`, `artista`, `técnico`, `contador`, `marketing`).
++- **Autorización (Frontend):** El archivo `ROLE_DEFS` en `auth.js` controla qué secciones y botones ve cada rol (`invitado`, `programador`, `productor`, `artista`, `técnico`, `contador`, `marketing`). Desde la sesión de "Mi Trabajo", todos los roles incluyen `"mitrabajo"` en `sections`, pero el nav-item se oculta en runtime si el usuario no tiene una `persona` vinculada (no es un control de rol, es un control de datos).
+ - **Base de Datos (RLS):** Actualmente permisiva (todo usuario autenticado puede leer/escribir casi todo). La seguridad real vive en la interfaz. Esto es una decisión deliberada para agilizar el desarrollo; una granularidad fina vía RLS se evaluará a futuro.
+ 
+ ## 7. Convenciones de UI/UX
+diff --git a/css/app.css b/css/app.css
+index 36f8b07..fe07a96 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -445,6 +445,28 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
+ .pl-carga-viaje{font-size:9px;}
+ .pl-carga-col-today{box-shadow:inset 0 0 0 2px var(--p400);}
+ 
++/* ── MI TRABAJO ── */
++.mt-hero{background:linear-gradient(135deg,var(--p400),var(--p600));border-color:transparent;padding:22px 24px;}
++.mt-hero-label{font-size:11px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px;}
++.mt-hero-nombre{font-size:22px;font-weight:700;color:#fff;line-height:1.2;}
++.mt-hero-sub{font-size:12px;color:rgba(255,255,255,0.7);margin-top:4px;}
++.mt-hero-cuenta{font-size:13px;font-weight:700;color:#fff;margin-top:12px;background:rgba(255,255,255,0.16);display:inline-block;padding:4px 12px;border-radius:20px;}
++.mt-hero-empty{text-align:center;padding:30px 20px;background:var(--surface);}
++.mt-grupo-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9690C2;margin:16px 0 8px;}
++.mt-item-card{display:flex;align-items:center;gap:12px;background:var(--surface);border:0.5px solid var(--border-soft);border-radius:10px;padding:11px 14px;margin-bottom:7px;cursor:pointer;transition:box-shadow .15s,border-color .15s;}
++.mt-item-card:hover{box-shadow:0 2px 10px rgba(0,0,0,0.08);border-color:var(--p400);}
++.mt-item-icon{font-size:18px;flex-shrink:0;}
++.mt-item-body{flex:1;min-width:0;}
++.mt-item-nombre{font-size:13px;font-weight:600;color:#F5F4FB;}
++.mt-item-sub{font-size:11px;color:#9690C2;margin-top:2px;}
++.mt-item-right{text-align:right;flex-shrink:0;}
++.mt-item-fecha{font-size:11px;color:#B7B2DA;font-weight:600;}
++.mt-item-estado{font-size:10px;color:#8077B0;margin-top:2px;}
++.mt-heat-row{display:flex;gap:6px;overflow-x:auto;padding:4px 0;}
++.mt-heat-col{display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;width:54px;}
++.mt-heat-cell{width:100%;height:38px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;}
++.mt-heat-label{font-size:9px;color:#9690C2;text-align:center;}
++
+ /* ── VISTA ANUAL ── */
+ .cal-grid{display:flex;flex-direction:column;gap:2px;}
+ .month-block{display:flex;align-items:flex-start;gap:0;border-bottom:0.5px solid var(--border-soft);}
+diff --git a/index.html b/index.html
+index a64d858..3b98586 100644
+--- a/index.html
++++ b/index.html
+@@ -66,6 +66,7 @@
+   </div>
+   <nav class="sidebar-nav">
+     <div class="nav-item active" onclick="nav('dashboard',this)"><span class="nav-icon">⬛</span>Dashboard</div>
++    <div class="nav-item" onclick="nav('mitrabajo',this)"><span class="nav-icon">👤</span>Mi trabajo</div>
+     <div class="nav-item" onclick="nav('coordinacion',this)"><span class="nav-icon">🧭</span>Coordinación</div>
+     <div class="nav-item" onclick="nav('shows',this)"><span class="nav-icon">🎭</span>Shows 2026</div>
+     <div class="nav-item" onclick="nav('contenido',this)"><span class="nav-icon">🎬</span>Contenido digital</div>
+@@ -135,6 +136,11 @@
+     </div>
+   </div>
+ 
++  <!-- ── MI TRABAJO ── -->
++  <div id="sec-mitrabajo" class="section">
++    <div id="mt-body"></div>
++  </div>
++
+   <!-- ── COORDINACIÓN ── -->
+   <div id="sec-coordinacion" class="section">
+     <p style="font-size:11px;color:#aaa;margin-bottom:14px;">Vista rápida del avance por departamento en cada show: ficha técnica, hoja de ruta, presupuesto y contenido digital. Pensada para que productores y artista vean de un vistazo dónde falta coordinar.</p>
+@@ -580,6 +586,7 @@
+ <script src="js/contenido.js"></script>
+ <script src="js/equipo.js"></script>
+ <script src="js/planner.js"></script>
++<script src="js/mitrabajo.js"></script>
+ <script src="js/export.js"></script>
+ 
+ </body>
+diff --git a/js/app.js b/js/app.js
+index 65b6c16..3c087a6 100644
+--- a/js/app.js
++++ b/js/app.js
+@@ -106,7 +106,7 @@ function resetShowsData(){
+ }
+ 
+ // ── NAV ──
+-const TITLES={dashboard:"Dashboard ejecutivo",coordinacion:"Coordinación de departamentos",shows:"Shows 2026",contenido:"Contenido digital",presupuesto:"Finanzas · reportes y consolidado",roadmap:"Hoja de ruta · día del show",planner:"Planner 2026",equipo:"Equipo de producción"};
++const TITLES={dashboard:"Dashboard ejecutivo",mitrabajo:"Mi trabajo",coordinacion:"Coordinación de departamentos",shows:"Shows 2026",contenido:"Contenido digital",presupuesto:"Finanzas · reportes y consolidado",roadmap:"Hoja de ruta · día del show",planner:"Planner 2026",equipo:"Equipo de producción"};
+ function nav(id,el){
+   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+   document.querySelectorAll(".nav-item").forEach(n=>n.classList.remove("active"));
+@@ -115,6 +115,7 @@ function nav(id,el){
+   if(el)el.classList.add("active");
+   document.getElementById("topbar-title").textContent=TITLES[id]||id;
+   if(id==="dashboard"){buildDash();updateHeader();}
++  if(id==="mitrabajo")buildMiTrabajo();
+   if(id==="coordinacion")buildCoordinacion();
+   if(id==="shows")buildShows();
+   if(id==="roadmap")buildRoadmapSelect();
+diff --git a/js/auth.js b/js/auth.js
+index d7cb42a..2864645 100644
+--- a/js/auth.js
++++ b/js/auth.js
+@@ -1,12 +1,12 @@
+ // ── ROLE DEFINITIONS ──
+ const ROLE_DEFS={
+-  invitado:{label:"Invitado",icon:"👋",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+-  programador:{label:"Programador",icon:"⬛",color:"#1a1a18",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+-  productor:{label:"Productor",icon:"🎬",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+-  artista:{label:"Artista",icon:"🎤",color:"var(--p600)",sections:["dashboard","coordinacion","shows","contenido","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
+-  contador:{label:"Contador",icon:"📊",color:"var(--t600)",sections:["dashboard","presupuesto","shows"],canEdit:false,showFinancials:true},
+-  tecnico:{label:"Técnico",icon:"🔧",color:"var(--b600)",sections:["shows"],canEdit:false,showFinancials:false,showTabs:["resumen","ficha","equipo","bitacora","roadmap","multimedia"]},
+-  marketing:{label:"Marketing",icon:"📣",color:"var(--a600)",sections:["dashboard","shows","contenido","planner"],canEdit:false,showFinancials:false}
++  invitado:{label:"Invitado",icon:"👋",color:"var(--p600)",sections:["dashboard","mitrabajo","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
++  programador:{label:"Programador",icon:"⬛",color:"#1a1a18",sections:["dashboard","mitrabajo","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
++  productor:{label:"Productor",icon:"🎬",color:"var(--p600)",sections:["dashboard","mitrabajo","coordinacion","shows","contenido","presupuesto","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
++  artista:{label:"Artista",icon:"🎤",color:"var(--p600)",sections:["dashboard","mitrabajo","coordinacion","shows","contenido","roadmap","planner","equipo"],canEdit:true,showFinancials:true},
++  contador:{label:"Contador",icon:"📊",color:"var(--t600)",sections:["dashboard","mitrabajo","presupuesto","shows"],canEdit:false,showFinancials:true},
++  tecnico:{label:"Técnico",icon:"🔧",color:"var(--b600)",sections:["shows","mitrabajo"],canEdit:false,showFinancials:false,showTabs:["resumen","ficha","equipo","bitacora","roadmap","multimedia"]},
++  marketing:{label:"Marketing",icon:"📣",color:"var(--a600)",sections:["dashboard","mitrabajo","shows","contenido","planner"],canEdit:false,showFinancials:false}
+ };
+ 
+ let currentUser=null;
+@@ -42,6 +42,11 @@ function applyRoleRestrictions(){
+       el.style.display=allowed.includes(sec)?"flex":"none";
+     }
+   });
++  // "Mi Trabajo" además requiere que el usuario esté vinculado a una persona del equipo (perfilId)
++  if(allowed.includes("mitrabajo")){
++    const mtEl=document.querySelector(`.nav-item[onclick*="nav('mitrabajo'"]`);
++    if(mtEl&&typeof miPersonaActual==="function"&&!miPersonaActual())mtEl.style.display="none";
++  }
+   if(role.canEdit){
+     document.body.classList.add("can-edit");
+   } else {
+diff --git a/js/mitrabajo.js b/js/mitrabajo.js
+new file mode 100644
+index 0000000..db89d17
+--- /dev/null
++++ b/js/mitrabajo.js
+@@ -0,0 +1,148 @@
++// ── MI TRABAJO (dashboard personal) ──
++// Concepto híbrido: destacado del próximo compromiso + stats + toggle Lista/Mi carga (mini-heatmap).
++// Visible para todos los roles, pero requiere que el usuario logueado esté vinculado a una
++// persona del equipo (PERSONAS.perfilId === currentUser.id). Si no, el nav-item se oculta
++// (ver applyRoleRestrictions en auth.js) y esta vista muestra un estado vacío como respaldo.
++
++let mtVista='lista'; // 'lista' | 'heatmap'
++
++function miPersonaActual(){
++  if(!currentUser)return null;
++  return PERSONAS.find(p=>String(p.perfilId)===String(currentUser.id))||null;
++}
++
++function mtSetVista(v){
++  mtVista=v;
++  buildMiTrabajo();
++}
++
++// Resuelve una asignación a un objeto enriquecido con los datos del show/contenido real.
++// Reutiliza plCargaResolveRange() (de planner.js, B.5) para el rango de fechas — misma lógica
++// que el Gantt y la Carga de Equipo, sin duplicar nada.
++function mtResolveItem(a){
++  const r=plCargaResolveRange(a.entityType,a.entityId);
++  if(!r)return null;
++  if(a.entityType==='show'){
++    const idx=SHOWS.findIndex(x=>String(x.id)===String(a.entityId));
++    if(idx<0)return null;
++    const s=SHOWS[idx];
++    return{a,ini:r.ini,fin:r.fin,kind:'show',idx,nombre:s.nombre,sub:s.tipo+(s.ciudad?(' · '+s.ciudad):''),estado:s.estado,fechaTxt:fmtDate(s.fecha)};
++  }
++  const it=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).find(x=>String(x.id)===String(a.entityId));
++  if(!it)return null;
++  return{a,ini:r.ini,fin:r.fin,kind:'contenido',idRef:it.id,nombre:it.nombre,sub:it.tipo+(it.plataforma?(' · '+it.plataforma):''),estado:it.estado,fechaTxt:it.fecha?fmtDate(it.fecha):'Sin fecha objetivo'};
++}
++
++function mtCuentaAtras(fin,today){
++  const dias=Math.round((fin-today)/(1000*60*60*24));
++  if(dias<0)return'En curso';
++  if(dias===0)return'Hoy';
++  if(dias===1)return'Mañana';
++  return`En ${dias} días`;
++}
++
++function buildMiTrabajo(){
++  const body=document.getElementById('mt-body');
++  if(!body)return;
++  const persona=miPersonaActual();
++  if(!persona){
++    body.innerHTML=`<div class="card" style="text-align:center;color:#bbb;padding:50px 20px;">
++      <div style="font-size:32px;margin-bottom:10px;">👤</div>
++      <div style="font-weight:600;color:#ddd;margin-bottom:6px;">Tu usuario todavía no está vinculado a una persona del equipo.</div>
++      <div style="font-size:12px;">Pedile a alguien con permisos que te vincule desde la sección Equipo para ver acá tus shows y piezas de contenido asignadas.</div>
++    </div>`;
++    return;
++  }
++
++  const today=new Date();today.setHours(12,0,0,0);
++  const items=ASIGNACIONES.filter(a=>a.personaId===persona.id).map(mtResolveItem).filter(Boolean);
++  items.sort((x,y)=>x.ini-y.ini);
++
++  const activos=items.filter(it=>it.fin>=today);
++  const proximo=activos[0]||null;
++
++  // ── Stats ──
++  const weekStart=new Date(today);weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
++  const weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+6);weekEnd.setHours(23,59,59,999);
++  const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
++  const monthEnd=new Date(today.getFullYear(),today.getMonth()+1,0,23,59,59,999);
++  const estaSemana=items.filter(it=>it.ini<=weekEnd&&it.fin>=weekStart).length;
++  const esteMes=items.filter(it=>it.ini<=monthEnd&&it.fin>=monthStart).length;
++  const totalActivo=activos.length;
++
++  // ── Destacado: próximo compromiso ──
++  const heroHTML=proximo?`
++    <div class="card mt-hero">
++      <div class="mt-hero-label">${proximo.kind==='show'?'🎤 Tu próximo show':'🎬 Tu próxima entrega'}</div>
++      <div class="mt-hero-nombre">${proximo.nombre}</div>
++      <div class="mt-hero-sub">${proximo.sub}${proximo.a.rol?(' · '+proximo.a.rol):''}</div>
++      <div class="mt-hero-cuenta">${mtCuentaAtras(proximo.fin,today)} · ${proximo.fechaTxt}</div>
++    </div>`:`
++    <div class="card mt-hero mt-hero-empty">
++      <div style="font-size:28px;">🎉</div>
++      <div style="margin-top:6px;color:#ddd;font-weight:600;">No tenés compromisos activos por ahora.</div>
++    </div>`;
++
++  const statsHTML=`<div class="stats-grid" style="margin-top:14px;">
++    <div class="stat-card"><div class="lbl">Esta semana</div><div class="val">${estaSemana}</div><div class="sub">shows + piezas</div></div>
++    <div class="stat-card"><div class="lbl">Este mes</div><div class="val">${esteMes}</div><div class="sub">shows + piezas</div></div>
++    <div class="stat-card"><div class="lbl">Activo en total</div><div class="val">${totalActivo}</div><div class="sub">sin terminar todavía</div></div>
++  </div>`;
++
++  const toggleHTML=`<div class="pl-kanban-toggle" style="margin-top:18px;margin-bottom:10px;">
++    <button class="pl-kanban-toggle-btn ${mtVista==='lista'?'active':''}" onclick="mtSetVista('lista')">📋 Lista</button>
++    <button class="pl-kanban-toggle-btn ${mtVista==='heatmap'?'active':''}" onclick="mtSetVista('heatmap')">🔥 Mi carga</button>
++  </div>`;
++
++  const contentHTML=mtVista==='lista'?mtListaHTML(activos):mtHeatmapHTML(items,today);
++
++  body.innerHTML=heroHTML+statsHTML+toggleHTML+contentHTML;
++}
++
++function mtListaHTML(activos){
++  if(!activos.length)return`<div class="card" style="text-align:center;color:#bbb;padding:30px;">No hay nada asignado todavía.</div>`;
++  const hoy=new Date();hoy.setHours(12,0,0,0);
++  const en14=new Date(hoy);en14.setDate(en14.getDate()+14);
++  const grupos=[
++    {label:'Próximas 2 semanas',items:activos.filter(it=>it.ini<=en14)},
++    {label:'Más adelante',items:activos.filter(it=>it.ini>en14)},
++  ].filter(g=>g.items.length);
++  return grupos.map(g=>`<div class="mt-grupo-label">${g.label}</div>${g.items.map(mtCardHTML).join('')}`).join('');
++}
++
++function mtCardHTML(it){
++  const onclick=it.kind==='show'?`goToShow(${it.idx})`:`openCdDetail('${it.idRef}')`;
++  return`<div class="mt-item-card" onclick="${onclick}">
++    <div class="mt-item-icon">${it.kind==='show'?'🎤':'🎬'}</div>
++    <div class="mt-item-body">
++      <div class="mt-item-nombre">${it.nombre}</div>
++      <div class="mt-item-sub">${it.sub}${it.a.rol?' · '+it.a.rol:''}</div>
++    </div>
++    <div class="mt-item-right">
++      <div class="mt-item-fecha">${it.fechaTxt}</div>
++      <div class="mt-item-estado">${it.estado}${it.a.viaja?' ✈️':''}</div>
++    </div>
++  </div>`;
++}
++
++// Mini-heatmap personal: 10 semanas (de la semana actual en adelante), misma paleta que
++// Carga de Equipo (plCargaColor, B.5) pero filtrado a esta sola persona.
++function mtHeatmapHTML(items,today){
++  const weeks=[];
++  let cur=new Date(today);cur.setDate(cur.getDate()-((cur.getDay()+6)%7));cur.setHours(12,0,0,0);
++  for(let i=0;i<10;i++){
++    const ini=new Date(cur);const fin=new Date(cur);fin.setDate(fin.getDate()+6);fin.setHours(23,59,59,999);
++    const matched=items.filter(it=>it.ini<=fin&&it.fin>=ini);
++    weeks.push({label:weekLabel(cur).split('–')[0].trim(),ini,fin,count:matched.length,viaja:matched.some(m=>m.a.viaja),items:matched,isToday:today>=ini&&today<=fin});
++    cur.setDate(cur.getDate()+7);
++  }
++  const cellsHTML=weeks.map(w=>{
++    const col=plCargaColor(w.count);
++    const tip=w.items.length?w.items.map(i=>i.nombre).join(', '):'Sin carga';
++    return`<div class="mt-heat-col">
++      <div class="mt-heat-cell ${w.isToday?'pl-carga-col-today':''}" style="background:${col.bg};color:${col.txt};" title="${tip.replace(/"/g,'&quot;')}">${w.count||''}${w.viaja?' ✈️':''}</div>
++      <div class="mt-heat-label">${w.label}</div>
++    </div>`;
++  }).join('');
++  return`<div class="card"><div class="mt-heat-row">${cellsHTML}</div></div>`;
++}

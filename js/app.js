@@ -106,7 +106,7 @@ function resetShowsData(){
 }
 
 // ── NAV ──
-const TITLES={dashboard:"Dashboard ejecutivo",coordinacion:"Coordinación de departamentos",shows:"Shows 2026",contenido:"Contenido digital",presupuesto:"Finanzas · reportes y consolidado",roadmap:"Hoja de ruta · día del show",planner:"Planner 2026",equipo:"Equipo de producción"};
+const TITLES={dashboard:"Dashboard ejecutivo",mitrabajo:"Mi trabajo",coordinacion:"Coordinación de departamentos",shows:"Shows 2026",contenido:"Contenido digital",presupuesto:"Finanzas · reportes y consolidado",roadmap:"Hoja de ruta · día del show",planner:"Planner 2026",equipo:"Equipo de producción"};
 function nav(id,el){
   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach(n=>n.classList.remove("active"));
@@ -115,6 +115,7 @@ function nav(id,el){
   if(el)el.classList.add("active");
   document.getElementById("topbar-title").textContent=TITLES[id]||id;
   if(id==="dashboard"){buildDash();updateHeader();}
+  if(id==="mitrabajo")buildMiTrabajo();
   if(id==="coordinacion")buildCoordinacion();
   if(id==="shows")buildShows();
   if(id==="roadmap")buildRoadmapSelect();

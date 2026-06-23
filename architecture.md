@@ -28,7 +28,8 @@ QueseProduce es una **aplicación de página única (SPA)** para la gestión int
     ├── finanzas.js   # Reportes gráficos y financieros (EECC, Flujo).
     ├── contenido.js  # Módulo de Contenido Digital (CRUD, Kanban, Gantt).
     ├── equipo.js     # Equipo (Personas, Asignaciones, Multimedia, Bitácora).
-    ├── planner.js    # Planificador (vistas Anual, Calendario; dispatcher _renderPlannerView).
+    ├── planner.js    # Planificador (5 vistas: Anual, Calendario, Gantt, Kanban, Carga de Equipo; dispatcher _renderPlannerView).
+    ├── mitrabajo.js  # Dashboard personal "Mi Trabajo" (destacado + stats + toggle lista/heatmap por persona logueada).
     └── export.js     # Exportación a CSV y descarga de Fichas.
 ```
 
@@ -39,7 +40,7 @@ QueseProduce es una **aplicación de página única (SPA)** para la gestión int
 | `contenido_digital` | Piezas de marketing (reels, posts). | 1:N con `contenido_tasks`, `contenido_logs`, `contenido_metricas`, `media_items`. |
 | `personas` | Miembros del equipo. | 1:N con `asignaciones` (entidad polimórfica: `show` o `contenido`). |
 | `media_items` | Archivos multimedia. | Polimórfica: `show_id` o `contenido_id`. Almacenamiento en bucket `show-media`. |
-| `perfiles` | Usuarios autenticados (Google). | Vinculado a `personas` vía `perfil_id` para heredar foto/nombre. |
+| `perfiles` | Usuarios autenticados (Google). | Vinculado a `personas` vía `perfil_id` para heredar foto/nombre, y para que `Mi Trabajo` identifique qué `persona` corresponde al usuario logueado (`PERSONAS.find(p=>p.perfilId===currentUser.id)`). |
 
 ## 5. Patrones de Persistencia (Obligatorios)
 Para mantener la integridad de las FK y evitar IDs huérfanos, se usa un patrón específico según el tipo de relación:
@@ -62,7 +63,7 @@ Para mantener la integridad de las FK y evitar IDs huérfanos, se usa un patrón
 
 ## 6. Seguridad y Accesos
 - **Autenticación:** Solo Google OAuth. Los usuarios nuevos se crean automáticamente vía trigger en Supabase con rol `invitado`.
-- **Autorización (Frontend):** El archivo `ROLE_DEFS` en `auth.js` controla qué secciones y botones ve cada rol (`programador`, `productor`, `artista`, `técnico`, `contador`, `marketing`).
+- **Autorización (Frontend):** El archivo `ROLE_DEFS` en `auth.js` controla qué secciones y botones ve cada rol (`invitado`, `programador`, `productor`, `artista`, `técnico`, `contador`, `marketing`). Desde la sesión de "Mi Trabajo", todos los roles incluyen `"mitrabajo"` en `sections`, pero el nav-item se oculta en runtime si el usuario no tiene una `persona` vinculada (no es un control de rol, es un control de datos).
 - **Base de Datos (RLS):** Actualmente permisiva (todo usuario autenticado puede leer/escribir casi todo). La seguridad real vive en la interfaz. Esto es una decisión deliberada para agilizar el desarrollo; una granularidad fina vía RLS se evaluará a futuro.
 
 ## 7. Convenciones de UI/UX

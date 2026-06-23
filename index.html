@@ -66,6 +66,7 @@
   </div>
   <nav class="sidebar-nav">
     <div class="nav-item active" onclick="nav('dashboard',this)"><span class="nav-icon">⬛</span>Dashboard</div>
+    <div class="nav-item" onclick="nav('mitrabajo',this)"><span class="nav-icon">👤</span>Mi trabajo</div>
     <div class="nav-item" onclick="nav('coordinacion',this)"><span class="nav-icon">🧭</span>Coordinación</div>
     <div class="nav-item" onclick="nav('shows',this)"><span class="nav-icon">🎭</span>Shows 2026</div>
     <div class="nav-item" onclick="nav('contenido',this)"><span class="nav-icon">🎬</span>Contenido digital</div>
@@ -133,6 +134,11 @@
       <table class="tbl"><thead><tr><th>Show</th><th>Fecha</th><th>Ciudad</th><th>Tipo</th><th>Aforo</th><th>Ticket</th><th>Estado</th></tr></thead>
       <tbody id="dash-body"></tbody></table>
     </div>
+  </div>
+
+  <!-- ── MI TRABAJO ── -->
+  <div id="sec-mitrabajo" class="section">
+    <div id="mt-body"></div>
   </div>
 
   <!-- ── COORDINACIÓN ── -->
@@ -585,6 +591,7 @@
 <script src="js/contenido.js"></script>
 <script src="js/equipo.js"></script>
 <script src="js/planner.js"></script>
+<script src="js/mitrabajo.js"></script>
 <script src="js/export.js"></script>
 
 </body>
