@@ -199,11 +199,14 @@ function buildShows(){
         🎤 ${fmtDate(s.fecha)}<br><span style="font-size:10px;color:#bbb;">${s.hora}${(s.fechasExtra||[]).length?" · +"+(s.fechasExtra.length)+" fcn.":""}</span>
       </td>
       <td><span class="tipo-pill ${tipoC(s.tipo)}">${s.tipo}</span></td>
-      <td style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-        ${equipoStackHTML("show", s.id, 3)}
-        <button class="btn" style="font-size:9px; padding:2px 6px; white-space:nowrap;" 
-                onclick="event.stopPropagation(); openQuickTeam('show', ${s.id}, '${s.nombre.replace(/'/g, "\\'")}')">
-          ✏️</button>
+      <td>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          ${equipoStackHTML("show", s.id, 3)}
+          <button class="btn" style="font-size:9px; padding:2px 6px; white-space:nowrap;" 
+                  onclick="event.stopPropagation(); openQuickTeam('show', ${s.id}, '${s.nombre.replace(/'/g, "\\'")}')">
+            ✏️
+          </button>
+        </div>
       </td>
       <td>${s.aforo>0?s.aforo+"<br><span style='font-size:10px;color:#bbb;'>"+Math.round(s.obj*100)+"% obj.</span>":"—"}</td>
       <td style="font-variant-numeric:tabular-nums;">${hideFin?"—":(s.ticket>0?fmtCLP(s.ticket):"—")}</td>
