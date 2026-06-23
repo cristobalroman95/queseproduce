@@ -365,6 +365,7 @@ function buildPlannerGantt() {
   const canEditGantt = _canEdit();
   if (!_plGanttZoomTouched) { _plGanttDayWidth = window.innerWidth < 640 ? 14 : 28; _plGanttRowHeight = window.innerWidth < 640 ? 32 : 40; }
 
+  // ── Resolver fechas ──
   const resolved = [];
 
   if (showFilter) {
@@ -398,6 +399,7 @@ function buildPlannerGantt() {
     return;
   }
 
+  // ── Agrupar por show ──
   const groupMap = {};
   const groupOrder = [];
   resolved.forEach(r => {
@@ -421,6 +423,7 @@ function buildPlannerGantt() {
     return (SHOWS[idxA]?.fecha || '').localeCompare(SHOWS[idxB]?.fecha || '');
   });
 
+  // ── Rango de fechas ──
   const allDates = resolved.flatMap(r => [r.ini, r.fin, r.idea].filter(Boolean));
   let minDate = new Date(Math.min(...allDates));
   let maxDate = new Date(Math.max(...allDates));
@@ -438,6 +441,7 @@ function buildPlannerGantt() {
   const totalDays = Math.round((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
   const totalWidth = totalDays * dayWidth;
 
+  // ── Filas visibles ──
   const visibleRows = [];
   groupOrder.forEach(key => {
     const g = groupMap[key];
@@ -446,6 +450,7 @@ function buildPlannerGantt() {
     if (!collapsed) g.rows.forEach(r => visibleRows.push({ type: 'item', ...r }));
   });
 
+  // ── Ancho columna labels ──
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   ctx.font = '11px Inter,-apple-system,sans-serif';
@@ -456,12 +461,11 @@ function buildPlannerGantt() {
   });
   const labelColWidth = Math.min(Math.ceil(maxLabelW) + 10, 260);
 
+  // ── Header ──
   const showDayNum = dayWidth >= 14;
   const dayCells = [];
   const monthGroups = [];
-  let curMonth = null,
-    curStart = 0,
-    curCount = 0;
+  let curMonth = null, curStart = 0, curCount = 0;
   for (let d = 0; d < totalDays; d++) {
     const date = new Date(minDate);
     date.setDate(minDate.getDate() + d);
@@ -483,6 +487,7 @@ function buildPlannerGantt() {
   const todayOffset = Math.round((today - minDate) / (1000 * 60 * 60 * 24));
   const todayLineLeft = todayOffset * dayWidth + dayWidth / 2;
 
+  // ── Generar filas ──
   let cursorY = 0;
   const labelRowsHTML = [];
   const barsHTML = [];
@@ -514,24 +519,37 @@ function buildPlannerGantt() {
         const showBarData = canEditGantt ? ` data-gantt-edit="show" data-gantt-idx="${row.realIdx}" data-gantt-fecha="${row.s.fecha}" data-gantt-nombre="${row.s.nombre.replace(/"/g, '&quot;')}"` : '';
         barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="goToShow(' + row.realIdx + ')"'} title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)} ${canEditGantt ? '· Clic para editar fecha' : ''}"${showBarData} style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px solid ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
       } else {
+        // ── CONTENIDO ──
         labelRowsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight < 34 ? '10px' : '11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${row.it.nombre}">${row.it.nombre}</div>`);
         const color = row.color;
         const opacity = row.it.estado === 'Publicado' ? 0.5 : 0.9;
+
+        // Construir objeto con las fechas existentes para pasarlo como data
+        const fields = {};
+        if (row.it.fechaIdea) fields.fechaIdea = row.it.fechaIdea;
+        if (row.it.fechaInicio) fields.fechaInicio = row.it.fechaInicio;
+        if (row.it.fecha) fields.fecha = row.it.fecha;
+        const fieldsJSON = JSON.stringify(fields).replace(/"/g, '&quot;');
+
         if (row.hasPrep) {
+          // Barra de preproducción (rayada) → target = fechaIdea
           const prepOff = Math.round((row.idea - minDate) / (1000 * 60 * 60 * 24));
           const prepDur = Math.max(Math.round((row.ini - row.idea) / (1000 * 60 * 60 * 24)), 1);
           barsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" title="Preproducción: ${fmtDate(row.it.fechaIdea)} → ${fmtDate(row.it.fechaInicio)}" style="position:absolute;left:${prepOff * dayWidth + 2}px;top:${top}px;width:${Math.max(prepDur * dayWidth - 2, 6)}px;height:${barH}px;background:repeating-linear-gradient(135deg,${color}55 0px,${color}55 4px,${color}22 4px,${color}22 8px);border:1px solid ${color}88;border-radius:6px 0 0 6px;cursor:pointer;box-sizing:border-box;"></div>`);
+
+          // Barra de producción (sólida) → target = fecha
           const prodOff = Math.round((row.ini - minDate) / (1000 * 60 * 60 * 24));
           const prodDur = Math.max(Math.round((row.fin - row.ini) / (1000 * 60 * 60 * 24)) + 1, 1);
           const prodW = Math.max(prodDur * dayWidth - 4, dayWidth - 4);
-          const prodBarData = canEditGantt ? ` data-gantt-edit="contenido-fecha" data-gantt-id="${row.it.id}" data-gantt-fecha="${row.it.fecha || ''}" data-gantt-nombre="${row.it.nombre.replace(/"/g, '&quot;')}"` : '';
-          barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="openCdDetail(\'' + row.it.id + '\')"'} title="${row.it.nombre} · Producción: ${fmtDate(row.it.fechaInicio)} → ${fmtDate(row.it.fecha)} ${canEditGantt ? '· Clic para editar fecha de entrega' : ''}"${prodBarData} style="position:absolute;left:${prodOff * dayWidth}px;top:${top}px;width:${prodW}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:0 6px 6px 0;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${prodW > 60 ? (cdEstEmoji(row.it.estado) + ' ' + row.it.nombre) : cdEstEmoji(row.it.estado)}</div>`);
+          const prodBarData = canEditGantt ? ` data-gantt-edit="contenido" data-gantt-target="fecha" data-gantt-id="${row.it.id}" data-gantt-fields='${fieldsJSON}' data-gantt-nombre="${row.it.nombre.replace(/"/g, '&quot;')}"` : '';
+          barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="openCdDetail(\'' + row.it.id + '\')"'} title="${row.it.nombre} · Producción: ${fmtDate(row.it.fechaInicio)} → ${fmtDate(row.it.fecha)} ${canEditGantt ? '· Clic para editar fechas' : ''}"${prodBarData} style="position:absolute;left:${prodOff * dayWidth}px;top:${top}px;width:${prodW}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:0 6px 6px 0;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${prodW > 60 ? (cdEstEmoji(row.it.estado) + ' ' + row.it.nombre) : cdEstEmoji(row.it.estado)}</div>`);
         } else {
+          // Barra única (sin preproducción diferenciada) → target = fecha
           const off = Math.round((row.ini - minDate) / (1000 * 60 * 60 * 24));
           const dur = Math.max(Math.round((row.fin - row.ini) / (1000 * 60 * 60 * 24)) + 1, 1);
           const w = Math.max(dur * dayWidth - 4, dayWidth - 4);
-          const singleBarData = canEditGantt ? ` data-gantt-edit="contenido-fecha" data-gantt-id="${row.it.id}" data-gantt-fecha="${row.it.fecha || ''}" data-gantt-nombre="${row.it.nombre.replace(/"/g, '&quot;')}"` : '';
-          barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="openCdDetail(\'' + row.it.id + '\')"'} title="${row.it.nombre} · ${fmtDate(row.it.fecha || row.it.fechaInicio)} ${canEditGantt ? '· Clic para editar fecha' : ''}"${singleBarData} style="position:absolute;left:${off * dayWidth + 2}px;top:${top}px;width:${w}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:6px;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${w > 60 ? (cdEstEmoji(row.it.estado) + ' ' + row.it.nombre) : cdEstEmoji(row.it.estado)}</div>`);
+          const singleBarData = canEditGantt ? ` data-gantt-edit="contenido" data-gantt-target="fecha" data-gantt-id="${row.it.id}" data-gantt-fields='${fieldsJSON}' data-gantt-nombre="${row.it.nombre.replace(/"/g, '&quot;')}"` : '';
+          barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="openCdDetail(\'' + row.it.id + '\')"'} title="${row.it.nombre} · ${fmtDate(row.it.fecha || row.it.fechaInicio)} ${canEditGantt ? '· Clic para editar fechas' : ''}"${singleBarData} style="position:absolute;left:${off * dayWidth + 2}px;top:${top}px;width:${w}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:6px;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${w > 60 ? (cdEstEmoji(row.it.estado) + ' ' + row.it.nombre) : cdEstEmoji(row.it.estado)}</div>`);
         }
       }
       cursorY += rowHeight;
@@ -540,6 +558,7 @@ function buildPlannerGantt() {
 
   const bodyHeight = cursorY;
 
+  // ── Controles ──
   const controlsHTML = `
   <div class="gantt-controls" style="margin-bottom:10px;">
     <div class="gantt-control-item"><label>🔍 Zoom tiempo</label><input type="range" min="6" max="50" step="1" value="${dayWidth}" oninput="setPlGanttDayWidth(this.value)"></div>
@@ -574,6 +593,7 @@ function buildPlannerGantt() {
     <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#9690C255 0px,#9690C255 4px,#9690C222 4px,#9690C222 8px);border:1px solid #9690C288;display:inline-block;"></span>Preproducción</span>
     <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#9690C2;display:inline-block;"></span>Producción</span>
   </div>`;
+  // Bind event listeners a las barras editables
   grid.querySelectorAll('[data-gantt-edit]').forEach(el => el.addEventListener('click', plGanttBarClick));
 }
 
@@ -581,10 +601,11 @@ function buildPlannerGantt() {
 function plGanttBarClick(e) {
   e.stopPropagation();
   const el = e.currentTarget;
-  const tipo = el.dataset.ganttEdit; // 'show' | 'contenido-fecha'
-  const fechaActual = el.dataset.ganttFecha || '';
+  const tipo = el.dataset.ganttEdit; // 'show' o 'contenido'
+  const targetField = el.dataset.ganttTarget || 'fecha'; // campo que se debe enfocar
   const nombre = el.dataset.ganttNombre || '';
 
+  // Remover picker previo
   const prev = document.getElementById('pl-gantt-datepicker');
   if (prev) prev.remove();
 
@@ -592,36 +613,85 @@ function plGanttBarClick(e) {
   const picker = document.createElement('div');
   picker.id = 'pl-gantt-datepicker';
   picker.className = 'pl-gantt-datepicker';
+
+  let fieldsHTML = '';
+  let focusId = '';
+
+  if (tipo === 'show') {
+    // Show: solo un campo
+    const fechaActual = el.dataset.ganttFecha || '';
+    fieldsHTML = `
+      <div class="pl-gantt-dp-field">
+        <label class="pl-gantt-dp-label">Fecha del show</label>
+        <input id="pl-gantt-dp-input-fecha" type="date" class="pl-gantt-dp-input" value="${fechaActual}">
+      </div>`;
+    focusId = 'pl-gantt-dp-input-fecha';
+  } else {
+    // Contenido: leer las fechas del dataset
+    let fields = {};
+    try {
+      const raw = el.dataset.ganttFields;
+      if (raw) fields = JSON.parse(raw.replace(/&quot;/g, '"'));
+    } catch (e) {}
+
+    // Orden de campos: idea, inicio, entrega
+    const fieldOrder = ['fechaIdea', 'fechaInicio', 'fecha'];
+    const fieldLabels = {
+      fechaIdea: '💡 Idea / preproducción',
+      fechaInicio: '🎬 Inicio producción',
+      fecha: '🚀 Entrega / publicación'
+    };
+
+    fieldOrder.forEach(key => {
+      if (fields[key] !== undefined) {
+        const val = fields[key] || '';
+        const label = fieldLabels[key] || key;
+        const isTarget = (key === targetField);
+        fieldsHTML += `
+          <div class="pl-gantt-dp-field">
+            <label class="pl-gantt-dp-label" style="${isTarget ? 'font-weight:700;color:var(--p400);' : ''}">${label}</label>
+            <input id="pl-gantt-dp-input-${key}" type="date" class="pl-gantt-dp-input" value="${val}" data-field="${key}">
+          </div>`;
+        if (isTarget) focusId = 'pl-gantt-dp-input-' + key;
+      }
+    });
+  }
+
+  // Si no hay campos, cerrar
+  if (!fieldsHTML) {
+    toast('⚠️ No hay fechas editables para este elemento.');
+    return;
+  }
+
   picker.innerHTML = `
-    <div class="pl-gantt-dp-label">${nombre}</div>
-    <input id="pl-gantt-dp-input" type="date" class="pl-gantt-dp-input" value="${fechaActual}">
+    <div class="pl-gantt-dp-header">${nombre}</div>
+    <div class="pl-gantt-dp-fields">${fieldsHTML}</div>
     <div class="pl-gantt-dp-btns">
-      <button class="pl-gantt-dp-ok">✓ Guardar</button>
+      <button class="pl-gantt-dp-ok">✓ Guardar cambios</button>
       <button class="pl-gantt-dp-cancel">✕</button>
     </div>`;
 
+  // Posicionar el picker
   picker.style.position = 'fixed';
   picker.style.top = (rect.bottom + 4) + 'px';
-  picker.style.left = Math.min(rect.left, window.innerWidth - 220) + 'px';
+  picker.style.left = Math.min(rect.left, window.innerWidth - 320) + 'px';
   document.body.appendChild(picker);
 
-  const input = document.getElementById('pl-gantt-dp-input');
-  input.focus();
+  // Enfocar el campo objetivo
+  const targetInput = document.getElementById(focusId);
+  if (targetInput) targetInput.focus();
 
   const close = () => { const p = document.getElementById('pl-gantt-datepicker'); if (p) p.remove(); };
 
+  // Botón cancelar
   picker.querySelector('.pl-gantt-dp-cancel').addEventListener('click', close);
+
+  // Botón guardar
   picker.querySelector('.pl-gantt-dp-ok').addEventListener('click', async () => {
-    const nuevaFecha = input.value;
-    if (!nuevaFecha) { close(); return; }
-    if (nuevaFecha === fechaActual) {
-      if (tipo === 'show') goToShow(parseInt(el.dataset.ganttIdx));
-      else openCdDetail(el.dataset.ganttId);
-      close();
-      return;
-    }
-    close();
     if (tipo === 'show') {
+      const input = document.getElementById('pl-gantt-dp-input-fecha');
+      const nuevaFecha = input.value;
+      if (!nuevaFecha) { close(); return; }
       const idx = parseInt(el.dataset.ganttIdx);
       const s = SHOWS[idx];
       if (!s) return;
@@ -630,19 +700,41 @@ function plGanttBarClick(e) {
       buildPlannerGantt();
       try {
         const { error } = await sb.from('shows').update({ fecha: nuevaFecha }).eq('id', s.id);
-        if (error) { s.fecha = prev; buildPlannerGantt(); toast('⚠️ Error guardando fecha: ' + error.message); } else toast('✅ Fecha actualizada → ' + fmtDate(nuevaFecha));
+        if (error) { s.fecha = prev; buildPlannerGantt(); toast('⚠️ Error guardando fecha: ' + error.message); }
+        else toast('✅ Fecha actualizada → ' + fmtDate(nuevaFecha));
       } catch (err) { s.fecha = prev; buildPlannerGantt(); toast('⚠️ Error de conexión'); }
-    } else {
-      // Contenido digital
-      const id = el.dataset.ganttId;
-      const it = (typeof CONTENIDO !== 'undefined' ? CONTENIDO : []).find(c => String(c.id) === String(id));
-      if (!it) return;
-      it.fecha = nuevaFecha;
-      await updateCdField(id, 'fecha', nuevaFecha);
-      buildPlannerGantt();
+      close();
+      return;
     }
+
+    // ── CONTENIDO: actualizar todos los campos que hayan cambiado ──
+    const id = el.dataset.ganttId;
+    const it = (typeof CONTENIDO !== 'undefined' ? CONTENIDO : []).find(c => String(c.id) === String(id));
+    if (!it) { close(); return; }
+
+    const inputs = picker.querySelectorAll('.pl-gantt-dp-input');
+    let changes = 0;
+    for (const inp of inputs) {
+      const field = inp.dataset.field;
+      if (!field) continue;
+      const newVal = inp.value;
+      const oldVal = it[field] || '';
+      if (newVal !== oldVal) {
+        it[field] = newVal;
+        await updateCdField(id, field, newVal);
+        changes++;
+      }
+    }
+    if (changes > 0) {
+      toast('✅ ' + changes + ' fecha' + (changes > 1 ? 's' : '') + ' actualizada' + (changes > 1 ? 's' : ''));
+    } else {
+      toast('ℹ️ Sin cambios');
+    }
+    buildPlannerGantt();
+    close();
   });
 
+  // Cerrar al hacer clic fuera
   setTimeout(() => document.addEventListener('click', function h(ev) {
     if (!document.getElementById('pl-gantt-datepicker')?.contains(ev.target)) {
       close();
