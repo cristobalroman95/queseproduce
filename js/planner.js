@@ -19,6 +19,9 @@ const SHOW_ESTADOS=['Tentativo','Confirmado','En proceso','Realizado','Cancelado
 let plKanbanMode='shows';   // 'shows' | 'contenido' — toggle dentro de la vista Kanban (Opción A)
 let _plKanbanDrag=null;     // {kind:'show'|'contenido', id}
 
+// ── Estado Carga de Equipo del Planner (B.5) ──
+let plCargaGran='semana';   // 'semana' | 'mes' — toggle de granularidad del heatmap
+
 function showColor(tipo,estado){
   if(estado==="Tentativo")return{bg:"#FAEEDA",txt:"#633806"};
   if(tipo==="Teatro")return{bg:"#E1F5EE",txt:"#085041"};
@@ -72,6 +75,7 @@ function _renderPlannerView(){
   if(plActiveView==='calendario') buildPlannerCalendario();
   else if(plActiveView==='gantt') buildPlannerGantt();
   else if(plActiveView==='kanban') buildPlannerKanban();
+  else if(plActiveView==='carga') buildPlannerCarga();
   else buildPlanner();
 }
 
@@ -597,6 +601,122 @@ function showGanttColor(tipo,estado){
 function syncPlGanttVertical(source){
   const other=source.id==='pl-gantt-labels'?document.getElementById('pl-gantt-scroll'):document.getElementById('pl-gantt-labels');
   if(other&&other.scrollTop!==source.scrollTop)other.scrollTop=source.scrollTop;
+}
+
+// ── VISTA CARGA DE EQUIPO / HEATMAP (B.5) ──
+function plCargaSetGran(g){
+  plCargaGran=g;
+  buildPlannerCarga();
+}
+function plCargaResolveRange(entityType,entityId){
+  if(entityType==='show'){
+    const s=SHOWS.find(x=>String(x.id)===String(entityId));
+    if(!s||!s.fecha)return null;
+    const d=new Date(s.fecha+'T12:00:00');
+    return{ini:d,fin:d,label:'🎤 '+s.nombre};
+  }
+  const it=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).find(x=>String(x.id)===String(entityId));
+  if(!it)return null;
+  let idea=it.fechaIdea?new Date(it.fechaIdea+'T12:00:00'):null;
+  let ini=it.fechaInicio?new Date(it.fechaInicio+'T12:00:00'):null;
+  let fin=it.fecha?new Date(it.fecha+'T12:00:00'):null;
+  if(!ini&&idea)ini=idea; if(!fin)fin=ini||idea; if(!ini)ini=fin; if(!idea)idea=ini;
+  if(!ini&&!fin)return null;
+  if(idea>ini){const t=idea;idea=ini;ini=t;}
+  if(ini>fin){const t=ini;ini=fin;fin=t;}
+  return{ini:idea,fin,label:it.nombre};
+}
+function plCargaColor(count){
+  if(count<=0)return{bg:'transparent',txt:'#665f99'};
+  if(count===1)return{bg:'var(--t50)',txt:'var(--t800)'};
+  if(count===2)return{bg:'var(--t200)',txt:'var(--t800)'};
+  if(count===3)return{bg:'var(--a100)',txt:'var(--a800)'};
+  if(count===4)return{bg:'var(--a400)',txt:'#fff'};
+  return{bg:'var(--c400)',txt:'#fff'};
+}
+function buildPlannerCarga(){
+  const grid=document.getElementById('planner-grid');
+  if(!grid)return;
+  const personas=PERSONAS.filter(p=>p.activo);
+  if(!personas.length){
+    grid.innerHTML=`<div class="card" style="text-align:center;color:#bbb;padding:40px;">No hay personas activas en el equipo todavía.</div>`;
+    return;
+  }
+  const showFilter=plActiveFilter==='todos'||plActiveFilter==='shows';
+  const contFilter=plActiveFilter==='todos'||plActiveFilter==='contenido';
+
+  // ── Resolver rango de fechas de cada asignación ──
+  const resolved=ASIGNACIONES
+    .filter(a=>(a.entityType==='show'&&showFilter)||(a.entityType==='contenido'&&contFilter))
+    .map(a=>{ const r=plCargaResolveRange(a.entityType,a.entityId); return r?{a,...r}:null; })
+    .filter(Boolean);
+
+  const today=new Date();today.setHours(12,0,0,0);
+  let minDate=resolved.length?new Date(Math.min(...resolved.map(r=>+r.ini))):new Date(today);
+  let maxDate=resolved.length?new Date(Math.max(...resolved.map(r=>+r.fin))):new Date(today);
+  if(today<minDate)minDate=new Date(today);
+  if(today>maxDate)maxDate=new Date(today);
+
+  // ── Generar columnas (períodos) ──
+  const periods=[];
+  if(plCargaGran==='semana'){
+    minDate.setDate(minDate.getDate()-7);
+    maxDate.setDate(maxDate.getDate()+28);
+    let cur=new Date(minDate); cur.setDate(cur.getDate()-((cur.getDay()+6)%7)); cur.setHours(12,0,0,0);
+    const end=new Date(maxDate);
+    let guard=0;
+    while(cur<=end&&guard<104){
+      const fin=new Date(cur); fin.setDate(fin.getDate()+6); fin.setHours(23,59,59,999);
+      periods.push({key:weekKey(cur),label:weekLabel(cur),ini:new Date(cur),fin,isToday:today>=cur&&today<=fin});
+      cur.setDate(cur.getDate()+7); guard++;
+    }
+  } else {
+    minDate.setDate(1); minDate.setMonth(minDate.getMonth()-1);
+    maxDate.setMonth(maxDate.getMonth()+3);
+    let cur=new Date(minDate.getFullYear(),minDate.getMonth(),1,12,0,0,0);
+    const end=new Date(maxDate.getFullYear(),maxDate.getMonth(),1);
+    let guard=0;
+    while(cur<=end&&guard<36){
+      const fin=new Date(cur.getFullYear(),cur.getMonth()+1,0,23,59,59,999);
+      periods.push({key:cur.getFullYear()+'-'+cur.getMonth(),label:MESES[cur.getMonth()]+' '+cur.getFullYear(),ini:new Date(cur),fin,isToday:today>=cur&&today<=fin});
+      cur=new Date(cur.getFullYear(),cur.getMonth()+1,1,12,0,0,0); guard++;
+    }
+  }
+
+  // ── Calcular carga por persona × período ──
+  const cargaMap={};
+  personas.forEach(p=>{ cargaMap[p.id]={}; periods.forEach(per=>{cargaMap[p.id][per.key]={count:0,viaja:false,items:[]};}); });
+  resolved.forEach(r=>{
+    const m=cargaMap[r.a.personaId];
+    if(!m)return; // persona inactiva o eliminada: se omite del heatmap
+    periods.forEach(per=>{
+      if(r.ini<=per.fin&&r.fin>=per.ini){
+        const c=m[per.key];
+        c.count++;
+        if(r.a.viaja)c.viaja=true;
+        c.items.push(r.label);
+      }
+    });
+  });
+
+  // ── Render ──
+  const headCols=periods.map(per=>`<th class="${per.isToday?'pl-carga-col-today':''}">${per.label}</th>`).join('');
+  const bodyRows=personas.map(p=>{
+    const cells=periods.map(per=>{
+      const c=cargaMap[p.id][per.key];
+      const col=plCargaColor(c.count);
+      const tip=c.items.length?c.items.join(', '):'Sin carga asignada';
+      return`<td class="pl-carga-cell ${per.isToday?'pl-carga-col-today':''}" style="background:${col.bg};color:${col.txt};" title="${tip.replace(/"/g,'&quot;')}">${c.count||''}${c.viaja?' <span class="pl-carga-viaje" title="Viaja">✈️</span>':''}</td>`;
+    }).join('');
+    return`<tr><td class="pl-carga-td-persona"><div class="pl-carga-persona-row">${personaAvatarHTML(p,'pl-carga-av')}<span>${p.nombre}</span></div></td>${cells}</tr>`;
+  }).join('');
+
+  const toggleHTML=`<div class="pl-kanban-toggle">
+    <button class="pl-kanban-toggle-btn ${plCargaGran==='semana'?'active':''}" onclick="plCargaSetGran('semana')">🗞 Semanas</button>
+    <button class="pl-kanban-toggle-btn ${plCargaGran==='mes'?'active':''}" onclick="plCargaSetGran('mes')">📆 Meses</button>
+  </div>`;
+
+  grid.innerHTML=toggleHTML+`<div class="pl-carga-wrap"><table class="pl-carga-table"><thead><tr><th class="pl-carga-th-persona">Persona</th>${headCols}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
 }
 
 // ── COORDINACIÓN ──

@@ -73,9 +73,10 @@ Para mantener la integridad de las FK y evitar IDs huérfanos, se usa un patrón
 
 ## 8. Convenciones del Planner
 - **Dispatcher central:** `_renderPlannerView()` decide qué función de build llamar según `plActiveView`. Siempre llamar esto desde `nav()` y `enterApp()`, nunca `buildPlanner()` directamente.
-- **Selector de vista:** `#pl-view-tabs` en `index.html` con tabs `.pl-view-tab`. Vistas actuales: Anual, Calendario, Gantt, Kanban. Queda pendiente sumar un quinto tab para Carga de Equipo (B.5).
-- **Filtro de tipo:** `plActiveFilter` (`todos` / `shows` / `contenido`) es transversal a Anual, Calendario y Gantt. **Excepción:** en Kanban, `#pl-filter-tabs` se oculta (`plSetView`) porque la vista usa su propio toggle interno `plKanbanMode` (`shows` / `contenido`), ya que cada tipo tiene estados incompatibles entre sí.
-- **`groupItemsByWeek(items, getFecha)`:** función global en `planner.js`, definida pero actualmente sin ningún llamador (código muerto). No confundir con `groupByWeek(items)` de `contenido.js` (un parámetro, sin getter de fecha), que es la que realmente usa la vista semanal de Contenido Digital.
+- **Selector de vista:** `#pl-view-tabs` en `index.html` con tabs `.pl-view-tab`. Las 5 vistas planeadas (Anual, Calendario, Gantt, Kanban, Carga de Equipo) ya están implementadas.
+- **Filtro de tipo:** `plActiveFilter` (`todos` / `shows` / `contenido`) es transversal a Anual, Calendario, Gantt y Carga de Equipo. **Excepción:** en Kanban, `#pl-filter-tabs` se oculta (`plSetView`) porque la vista usa su propio toggle interno `plKanbanMode` (`shows` / `contenido`), ya que cada tipo tiene estados incompatibles entre sí.
+- **`groupItemsByWeek(items, getFecha)`:** función global en `planner.js`, definida pero actualmente sin ningún llamador (código muerto). No confundir con `groupByWeek(items)` de `contenido.js` (un parámetro, sin getter de fecha), que es la que realmente usa la vista semanal de Contenido Digital y la que reutiliza Carga de Equipo (vía `weekKey`/`weekLabel`, no `groupByWeek` directamente).
+- **Resolución de rango de fechas show/contenido:** la lógica de "fecha de inicio efectiva → fecha de fin efectiva" de una pieza de contenido (con fallback entre `fechaIdea`/`fechaInicio`/`fecha`) está duplicada en tres lugares con la misma forma: `buildPlannerGantt()`, `buildContenidoGantt()` (`contenido.js`) y `plCargaResolveRange()` (Carga de Equipo). Si se vuelve a necesitar, considerar extraerla a una única función global.
 
 ---
 *Este documento se actualiza cuando hay cambios estructurales importantes en la arquitectura o convenciones de código.*

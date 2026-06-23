@@ -1,13 +1,13 @@
 # QueseProduce — Roadmap de Desarrollo (Pendientes)
-*Versión: 2.3 — 22 de junio de 2026*
+*Versión: 2.4 — 22 de junio de 2026*
 
 Este documento lista exclusivamente las **tareas pendientes** y el orden de prioridad para la evolución de la plataforma.
 Las bases (CRUD de shows, contenido digital, equipo, finanzas y hoja de ruta) están **completas y en producción**.
 
 ---
 
-## 🎯 Objetivo Actual: Completar el Planificador (Planner 5 vistas)
-El Planner tiene un selector de vista (📅 Anual / 🗓 Calendario / 📊 Gantt / 🗂 Kanban) con cuatro vistas implementadas. Solo falta Carga de Equipo.
+## 🎯 Planificador (Planner): 5/5 vistas completas
+El Planner tiene las 5 vistas planeadas implementadas (📅 Anual / 🗓 Calendario / 📊 Gantt / 🗂 Kanban / 👥 Carga de Equipo). No queda ningún objetivo de vista pendiente; ver "Mejoras Transversales" para deuda técnica y pulido menor.
 
 ### 📊 Resumen de las 5 Vistas
 | Vista | Pregunta que responde | Estado |
@@ -16,7 +16,7 @@ El Planner tiene un selector de vista (📅 Anual / 🗓 Calendario / 📊 Gantt
 | 🗓 **Calendario** (B.4) | ¿Qué hay el día X exactamente? | ✅ **Completado** (grilla mensual, navegación ← →, chips con tooltip, modal creación con fecha pre-cargada). |
 | 📊 **Gantt** (B.3) | ¿Hay choques de fechas? ¿Cómo se distribuye la carga? | ✅ **Completado** (barras unificadas shows + contenido, agrupado por show, zoom, colapsar grupos). Pendiente menor: edición inline por clic en barra. |
 | 🗂 **Kanban** (B.2) | ¿En qué etapa está cada cosa? | ✅ **Completado** (toggle Shows/Contenido, columnas por estado, drag & drop con persistencia, respeta `canEdit`). |
-| 👥 **Carga de Equipo** (B.5) | ¿Quién está sobrecargado? ¿Quién tiene espacio? | 🔴 **Pendiente (Prioridad 1 - única vista restante)** |
+| 👥 **Carga de Equipo** (B.5) | ¿Quién está sobrecargado? ¿Quién tiene espacio? | ✅ **Completado** (heatmap personas × período, toggle Semanas/Meses, indicador ✈️ viaja). |
 
 ---
 
@@ -80,31 +80,40 @@ El Planner tiene un selector de vista (📅 Anual / 🗓 Calendario / 📊 Gantt
 
 ---
 
-## ⚡ Fase 1: B.5 — Carga de Equipo (Heatmap) — Próximo Paso
-### Descripción
-Vista de planificación de dotación. Quinto tab en el selector.
+## ✅ B.5 — Carga de Equipo (Heatmap) (Completado)
+### Qué se implementó
+- Quinto y último tab "👥 Carga de Equipo" en `#pl-view-tabs`, con case en `_renderPlannerView()`.
+- **Granularidad con toggle (decisión: Ambas):** botones "🗞 Semanas" / "📆 Meses" (`plCargaSetGran`), reutilizando el estilo `.pl-kanban-toggle` ya existente. Semanas usa `weekKey`/`weekLabel` de `contenido.js` (lunes a domingo); meses usa `MESES`/año.
+- **Filas:** personas activas del equipo (`PERSONAS.filter(p=>p.activo)`).
+- **Columnas:** períodos generados dinámicamente entre la fecha mínima y máxima de todas las asignaciones (con `today` siempre incluido y padding de 1 período antes / algunos después).
+- **Celdas:** cuentan una asignación en cada período con el que se **superpone su rango de fechas** (no solo su fecha puntual) — para shows es 1 día puntual; para contenido es `fechaIdea→fecha` (todo el ciclo de preproducción + producción), igual criterio que el Gantt. Esto refleja mejor la carga real de trabajo que contar solo por fecha de entrega.
+- **Color:** heatmap de 5 niveles, `plCargaColor(count)` → 0 transparente, 1-2 verde (`--t50`/`--t200`), 3-4 ámbar (`--a100`/`--a400`), 5+ rojo (`--c400`).
+- **Indicador ✈️:** se muestra en la celda si alguna asignación superpuesta en ese período tiene `viaja:true`.
+- **Tooltip nativo:** `title` con el listado de nombres de shows/piezas que componen el número de esa celda.
+- Columna de persona y fila de encabezado con `position:sticky` para no perderse al hacer scroll horizontal/vertical en equipos o rangos grandes. Columna/celda del período actual resaltada con un borde violeta sutil (mismo criterio visual que "hoy" en Calendario/Gantt).
+- Respeta el filtro `#pl-filter-tabs` (todos/shows/contenido) — a diferencia de Kanban, aquí sí tiene sentido filtrar la carga solo por shows o solo por contenido.
 
-### Requisitos Técnicos
-1. **Filas:** Personas del equipo (`PERSONAS`).
-2. **Columnas:** Semanas o meses.
-3. **Celdas:** Cantidad de shows + piezas asignadas a esa persona en ese período.
-4. **Color:** Heatmap verde claro → rojo intenso.
-5. **Indicador:** Marcar semanas con `viaja: true` en la asignación.
+### Archivos modificados
+- `js/planner.js` — nuevas funciones `buildPlannerCarga`, `plCargaSetGran`, `plCargaResolveRange`, `plCargaColor`; nuevo estado `plCargaGran`; nuevo case `'carga'` en `_renderPlannerView()`.
+- `index.html` — agregado botón "👥 Carga de Equipo" en `#pl-view-tabs`.
+- `css/app.css` — estilos para `.pl-carga-wrap`, `.pl-carga-table`, `.pl-carga-th-persona`/`.pl-carga-td-persona` (sticky), `.pl-carga-persona-row`, `.pl-carga-av`, `.pl-carga-cell`, `.pl-carga-viaje`, `.pl-carga-col-today`.
 
 ---
 
 ## 🔧 Mejoras Transversales (Backlog Técnico)
 - **Filtros del Planner:** Añadir filtros por **Estado** (multiselect) y **Rango de Fechas** a todas las vistas (actualmente solo existe filtro por tipo: todos/shows/contenido).
 - **Edición inline en Gantt:** Implementar clic en barra → `input date` inline para mover fechas sin abrir el detalle (ver nota en sección B.3).
+- **Drill-down en Carga de Equipo:** Hoy el detalle de una celda solo se ve en el `title` (tooltip nativo). Podría mejorarse con un clic que abra un modal/lista con los shows y piezas de ese período (ver nota en sección B.5).
 - **Debt Técnica:** Eliminar `persistContenido()` (marcada como `OBSOLETA` en el código) cuando sea oportuno.
 - **Debt Técnica:** `groupItemsByWeek(items, getFecha)` en `planner.js` no tiene ningún llamador (código muerto, quedó de una versión anterior de B.4). Evaluar eliminarla o reaprovecharla; no confundir con `groupByWeek(items)` de `contenido.js`, que sí está en uso.
 
 ---
 
-## 📌 Funciones clave del Planner (referencia para próximas vistas)
-- `_renderPlannerView()` — dispatcher central; llamar desde `nav()` y cualquier nueva vista.
+## 📌 Funciones clave del Planner (mapa de referencia)
+- `_renderPlannerView()` — dispatcher central; llamar desde `nav()` y cualquier vista nueva que se agregue a futuro.
 - `equipoStackHTML(entityType, entityId, max)` — avatares del equipo, disponible en `equipo.js`.
 - `goToShow(idx)` / `openCdDetail(id)` — puntos de entrada al detalle desde el Planner.
-- `buildPlannerGantt()` — en `planner.js`, Gantt unificado (B.3, completado).
-- `buildPlannerKanban()` — en `planner.js`, Kanban unificado (B.2, completado); patrón de toggle Shows/Contenido y de `UPDATE` puntual por `canEdit` reutilizable para Carga de Equipo (B.5).
+- `buildPlannerGantt()` — en `planner.js`, Gantt unificado (B.3).
+- `buildPlannerKanban()` — en `planner.js`, Kanban unificado (B.2).
+- `buildPlannerCarga()` — en `planner.js`, heatmap de carga de equipo (B.5); `plCargaResolveRange()` resuelve el rango de fechas de una asignación (show o contenido) con la misma lógica que el Gantt — reutilizable si se agrega alguna vista nueva basada en rangos de fecha.
 - `buildContenidoGantt()` — en `contenido.js`, Gantt específico del módulo de Contenido Digital (independiente del Gantt unificado del Planner).

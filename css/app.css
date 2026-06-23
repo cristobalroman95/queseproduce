@@ -431,6 +431,20 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .pl-kanban-card-meta{font-size:10px;color:#9690C2;margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
 .pl-kanban-empty{font-size:11px;color:#ccc;text-align:center;padding:10px 0;}
 
+/* ── PLANNER: vista Carga de Equipo / heatmap (B.5) ── */
+.pl-carga-wrap{overflow:auto;border:0.5px solid var(--border-soft);border-radius:8px;max-height:65vh;}
+.pl-carga-table{border-collapse:collapse;width:100%;font-size:11px;}
+.pl-carga-table th,.pl-carga-table td{padding:7px 11px;text-align:center;border-bottom:0.5px solid var(--border-soft);white-space:nowrap;}
+.pl-carga-table thead th{position:sticky;top:0;background:var(--surface);z-index:2;font-size:9px;color:#9690C2;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
+.pl-carga-th-persona,.pl-carga-td-persona{position:sticky;left:0;background:var(--surface);z-index:1;text-align:left;min-width:170px;}
+.pl-carga-table thead th.pl-carga-th-persona{z-index:3;}
+.pl-carga-persona-row{display:flex;align-items:center;gap:7px;}
+.pl-carga-av{width:24px;height:24px;border-radius:50%;background:var(--p100);color:var(--p800);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+.pl-carga-av img{width:100%;height:100%;object-fit:cover;}
+.pl-carga-cell{font-weight:700;}
+.pl-carga-viaje{font-size:9px;}
+.pl-carga-col-today{box-shadow:inset 0 0 0 2px var(--p400);}
+
 /* ── VISTA ANUAL ── */
 .cal-grid{display:flex;flex-direction:column;gap:2px;}
 .month-block{display:flex;align-items:flex-start;gap:0;border-bottom:0.5px solid var(--border-soft);}

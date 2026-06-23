@@ -1,0 +1,284 @@
+diff --git a/architecture.md b/architecture.md
+index b439d1f..904e154 100644
+--- a/architecture.md
++++ b/architecture.md
+@@ -73,9 +73,10 @@ Para mantener la integridad de las FK y evitar IDs huérfanos, se usa un patrón
+ 
+ ## 8. Convenciones del Planner
+ - **Dispatcher central:** `_renderPlannerView()` decide qué función de build llamar según `plActiveView`. Siempre llamar esto desde `nav()` y `enterApp()`, nunca `buildPlanner()` directamente.
+-- **Selector de vista:** `#pl-view-tabs` en `index.html` con tabs `.pl-view-tab`. Vistas actuales: Anual, Calendario, Gantt, Kanban. Queda pendiente sumar un quinto tab para Carga de Equipo (B.5).
+-- **Filtro de tipo:** `plActiveFilter` (`todos` / `shows` / `contenido`) es transversal a Anual, Calendario y Gantt. **Excepción:** en Kanban, `#pl-filter-tabs` se oculta (`plSetView`) porque la vista usa su propio toggle interno `plKanbanMode` (`shows` / `contenido`), ya que cada tipo tiene estados incompatibles entre sí.
+-- **`groupItemsByWeek(items, getFecha)`:** función global en `planner.js`, definida pero actualmente sin ningún llamador (código muerto). No confundir con `groupByWeek(items)` de `contenido.js` (un parámetro, sin getter de fecha), que es la que realmente usa la vista semanal de Contenido Digital.
++- **Selector de vista:** `#pl-view-tabs` en `index.html` con tabs `.pl-view-tab`. Las 5 vistas planeadas (Anual, Calendario, Gantt, Kanban, Carga de Equipo) ya están implementadas.
++- **Filtro de tipo:** `plActiveFilter` (`todos` / `shows` / `contenido`) es transversal a Anual, Calendario, Gantt y Carga de Equipo. **Excepción:** en Kanban, `#pl-filter-tabs` se oculta (`plSetView`) porque la vista usa su propio toggle interno `plKanbanMode` (`shows` / `contenido`), ya que cada tipo tiene estados incompatibles entre sí.
++- **`groupItemsByWeek(items, getFecha)`:** función global en `planner.js`, definida pero actualmente sin ningún llamador (código muerto). No confundir con `groupByWeek(items)` de `contenido.js` (un parámetro, sin getter de fecha), que es la que realmente usa la vista semanal de Contenido Digital y la que reutiliza Carga de Equipo (vía `weekKey`/`weekLabel`, no `groupByWeek` directamente).
++- **Resolución de rango de fechas show/contenido:** la lógica de "fecha de inicio efectiva → fecha de fin efectiva" de una pieza de contenido (con fallback entre `fechaIdea`/`fechaInicio`/`fecha`) está duplicada en tres lugares con la misma forma: `buildPlannerGantt()`, `buildContenidoGantt()` (`contenido.js`) y `plCargaResolveRange()` (Carga de Equipo). Si se vuelve a necesitar, considerar extraerla a una única función global.
+ 
+ ---
+ *Este documento se actualiza cuando hay cambios estructurales importantes en la arquitectura o convenciones de código.*
+diff --git a/css/app.css b/css/app.css
+index 7e79976..36f8b07 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -431,6 +431,20 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
+ .pl-kanban-card-meta{font-size:10px;color:#9690C2;margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+ .pl-kanban-empty{font-size:11px;color:#ccc;text-align:center;padding:10px 0;}
+ 
++/* ── PLANNER: vista Carga de Equipo / heatmap (B.5) ── */
++.pl-carga-wrap{overflow:auto;border:0.5px solid var(--border-soft);border-radius:8px;max-height:65vh;}
++.pl-carga-table{border-collapse:collapse;width:100%;font-size:11px;}
++.pl-carga-table th,.pl-carga-table td{padding:7px 11px;text-align:center;border-bottom:0.5px solid var(--border-soft);white-space:nowrap;}
++.pl-carga-table thead th{position:sticky;top:0;background:var(--surface);z-index:2;font-size:9px;color:#9690C2;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
++.pl-carga-th-persona,.pl-carga-td-persona{position:sticky;left:0;background:var(--surface);z-index:1;text-align:left;min-width:170px;}
++.pl-carga-table thead th.pl-carga-th-persona{z-index:3;}
++.pl-carga-persona-row{display:flex;align-items:center;gap:7px;}
++.pl-carga-av{width:24px;height:24px;border-radius:50%;background:var(--p100);color:var(--p800);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
++.pl-carga-av img{width:100%;height:100%;object-fit:cover;}
++.pl-carga-cell{font-weight:700;}
++.pl-carga-viaje{font-size:9px;}
++.pl-carga-col-today{box-shadow:inset 0 0 0 2px var(--p400);}
++
+ /* ── VISTA ANUAL ── */
+ .cal-grid{display:flex;flex-direction:column;gap:2px;}
+ .month-block{display:flex;align-items:flex-start;gap:0;border-bottom:0.5px solid var(--border-soft);}
+diff --git a/index.html b/index.html
+index 67aae51..a64d858 100644
+--- a/index.html
++++ b/index.html
+@@ -284,6 +284,7 @@
+         <button class="pl-view-tab" onclick="plSetView('calendario',this)">🗓 Calendario</button>
+         <button class="pl-view-tab" onclick="plSetView('gantt',this)">📊 Gantt</button>
+         <button class="pl-view-tab" onclick="plSetView('kanban',this)">🗂 Kanban</button>
++        <button class="pl-view-tab" onclick="plSetView('carga',this)">👥 Carga de Equipo</button>
+       </div>
+       <div class="filter-tabs" id="pl-filter-tabs">
+         <button class="filter-tab active" onclick="plFilter('todos',this)">Todos</button>
+diff --git a/js/planner.js b/js/planner.js
+index 0783261..4155cf7 100644
+--- a/js/planner.js
++++ b/js/planner.js
+@@ -19,6 +19,9 @@ const SHOW_ESTADOS=['Tentativo','Confirmado','En proceso','Realizado','Cancelado
+ let plKanbanMode='shows';   // 'shows' | 'contenido' — toggle dentro de la vista Kanban (Opción A)
+ let _plKanbanDrag=null;     // {kind:'show'|'contenido', id}
+ 
++// ── Estado Carga de Equipo del Planner (B.5) ──
++let plCargaGran='semana';   // 'semana' | 'mes' — toggle de granularidad del heatmap
++
+ function showColor(tipo,estado){
+   if(estado==="Tentativo")return{bg:"#FAEEDA",txt:"#633806"};
+   if(tipo==="Teatro")return{bg:"#E1F5EE",txt:"#085041"};
+@@ -72,6 +75,7 @@ function _renderPlannerView(){
+   if(plActiveView==='calendario') buildPlannerCalendario();
+   else if(plActiveView==='gantt') buildPlannerGantt();
+   else if(plActiveView==='kanban') buildPlannerKanban();
++  else if(plActiveView==='carga') buildPlannerCarga();
+   else buildPlanner();
+ }
+ 
+@@ -599,6 +603,122 @@ function syncPlGanttVertical(source){
+   if(other&&other.scrollTop!==source.scrollTop)other.scrollTop=source.scrollTop;
+ }
+ 
++// ── VISTA CARGA DE EQUIPO / HEATMAP (B.5) ──
++function plCargaSetGran(g){
++  plCargaGran=g;
++  buildPlannerCarga();
++}
++function plCargaResolveRange(entityType,entityId){
++  if(entityType==='show'){
++    const s=SHOWS.find(x=>String(x.id)===String(entityId));
++    if(!s||!s.fecha)return null;
++    const d=new Date(s.fecha+'T12:00:00');
++    return{ini:d,fin:d,label:'🎤 '+s.nombre};
++  }
++  const it=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).find(x=>String(x.id)===String(entityId));
++  if(!it)return null;
++  let idea=it.fechaIdea?new Date(it.fechaIdea+'T12:00:00'):null;
++  let ini=it.fechaInicio?new Date(it.fechaInicio+'T12:00:00'):null;
++  let fin=it.fecha?new Date(it.fecha+'T12:00:00'):null;
++  if(!ini&&idea)ini=idea; if(!fin)fin=ini||idea; if(!ini)ini=fin; if(!idea)idea=ini;
++  if(!ini&&!fin)return null;
++  if(idea>ini){const t=idea;idea=ini;ini=t;}
++  if(ini>fin){const t=ini;ini=fin;fin=t;}
++  return{ini:idea,fin,label:it.nombre};
++}
++function plCargaColor(count){
++  if(count<=0)return{bg:'transparent',txt:'#665f99'};
++  if(count===1)return{bg:'var(--t50)',txt:'var(--t800)'};
++  if(count===2)return{bg:'var(--t200)',txt:'var(--t800)'};
++  if(count===3)return{bg:'var(--a100)',txt:'var(--a800)'};
++  if(count===4)return{bg:'var(--a400)',txt:'#fff'};
++  return{bg:'var(--c400)',txt:'#fff'};
++}
++function buildPlannerCarga(){
++  const grid=document.getElementById('planner-grid');
++  if(!grid)return;
++  const personas=PERSONAS.filter(p=>p.activo);
++  if(!personas.length){
++    grid.innerHTML=`<div class="card" style="text-align:center;color:#bbb;padding:40px;">No hay personas activas en el equipo todavía.</div>`;
++    return;
++  }
++  const showFilter=plActiveFilter==='todos'||plActiveFilter==='shows';
++  const contFilter=plActiveFilter==='todos'||plActiveFilter==='contenido';
++
++  // ── Resolver rango de fechas de cada asignación ──
++  const resolved=ASIGNACIONES
++    .filter(a=>(a.entityType==='show'&&showFilter)||(a.entityType==='contenido'&&contFilter))
++    .map(a=>{ const r=plCargaResolveRange(a.entityType,a.entityId); return r?{a,...r}:null; })
++    .filter(Boolean);
++
++  const today=new Date();today.setHours(12,0,0,0);
++  let minDate=resolved.length?new Date(Math.min(...resolved.map(r=>+r.ini))):new Date(today);
++  let maxDate=resolved.length?new Date(Math.max(...resolved.map(r=>+r.fin))):new Date(today);
++  if(today<minDate)minDate=new Date(today);
++  if(today>maxDate)maxDate=new Date(today);
++
++  // ── Generar columnas (períodos) ──
++  const periods=[];
++  if(plCargaGran==='semana'){
++    minDate.setDate(minDate.getDate()-7);
++    maxDate.setDate(maxDate.getDate()+28);
++    let cur=new Date(minDate); cur.setDate(cur.getDate()-((cur.getDay()+6)%7)); cur.setHours(12,0,0,0);
++    const end=new Date(maxDate);
++    let guard=0;
++    while(cur<=end&&guard<104){
++      const fin=new Date(cur); fin.setDate(fin.getDate()+6); fin.setHours(23,59,59,999);
++      periods.push({key:weekKey(cur),label:weekLabel(cur),ini:new Date(cur),fin,isToday:today>=cur&&today<=fin});
++      cur.setDate(cur.getDate()+7); guard++;
++    }
++  } else {
++    minDate.setDate(1); minDate.setMonth(minDate.getMonth()-1);
++    maxDate.setMonth(maxDate.getMonth()+3);
++    let cur=new Date(minDate.getFullYear(),minDate.getMonth(),1,12,0,0,0);
++    const end=new Date(maxDate.getFullYear(),maxDate.getMonth(),1);
++    let guard=0;
++    while(cur<=end&&guard<36){
++      const fin=new Date(cur.getFullYear(),cur.getMonth()+1,0,23,59,59,999);
++      periods.push({key:cur.getFullYear()+'-'+cur.getMonth(),label:MESES[cur.getMonth()]+' '+cur.getFullYear(),ini:new Date(cur),fin,isToday:today>=cur&&today<=fin});
++      cur=new Date(cur.getFullYear(),cur.getMonth()+1,1,12,0,0,0); guard++;
++    }
++  }
++
++  // ── Calcular carga por persona × período ──
++  const cargaMap={};
++  personas.forEach(p=>{ cargaMap[p.id]={}; periods.forEach(per=>{cargaMap[p.id][per.key]={count:0,viaja:false,items:[]};}); });
++  resolved.forEach(r=>{
++    const m=cargaMap[r.a.personaId];
++    if(!m)return; // persona inactiva o eliminada: se omite del heatmap
++    periods.forEach(per=>{
++      if(r.ini<=per.fin&&r.fin>=per.ini){
++        const c=m[per.key];
++        c.count++;
++        if(r.a.viaja)c.viaja=true;
++        c.items.push(r.label);
++      }
++    });
++  });
++
++  // ── Render ──
++  const headCols=periods.map(per=>`<th class="${per.isToday?'pl-carga-col-today':''}">${per.label}</th>`).join('');
++  const bodyRows=personas.map(p=>{
++    const cells=periods.map(per=>{
++      const c=cargaMap[p.id][per.key];
++      const col=plCargaColor(c.count);
++      const tip=c.items.length?c.items.join(', '):'Sin carga asignada';
++      return`<td class="pl-carga-cell ${per.isToday?'pl-carga-col-today':''}" style="background:${col.bg};color:${col.txt};" title="${tip.replace(/"/g,'&quot;')}">${c.count||''}${c.viaja?' <span class="pl-carga-viaje" title="Viaja">✈️</span>':''}</td>`;
++    }).join('');
++    return`<tr><td class="pl-carga-td-persona"><div class="pl-carga-persona-row">${personaAvatarHTML(p,'pl-carga-av')}<span>${p.nombre}</span></div></td>${cells}</tr>`;
++  }).join('');
++
++  const toggleHTML=`<div class="pl-kanban-toggle">
++    <button class="pl-kanban-toggle-btn ${plCargaGran==='semana'?'active':''}" onclick="plCargaSetGran('semana')">🗞 Semanas</button>
++    <button class="pl-kanban-toggle-btn ${plCargaGran==='mes'?'active':''}" onclick="plCargaSetGran('mes')">📆 Meses</button>
++  </div>`;
++
++  grid.innerHTML=toggleHTML+`<div class="pl-carga-wrap"><table class="pl-carga-table"><thead><tr><th class="pl-carga-th-persona">Persona</th>${headCols}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
++}
++
+ // ── COORDINACIÓN ──
+ function coordFilter(f,btn){
+   coordActiveFilter=f;
+diff --git a/roadmap.md b/roadmap.md
+index 66413ca..54d1e89 100644
+--- a/roadmap.md
++++ b/roadmap.md
+@@ -1,13 +1,13 @@
+ # QueseProduce — Roadmap de Desarrollo (Pendientes)
+-*Versión: 2.3 — 22 de junio de 2026*
++*Versión: 2.4 — 22 de junio de 2026*
+ 
+ Este documento lista exclusivamente las **tareas pendientes** y el orden de prioridad para la evolución de la plataforma.
+ Las bases (CRUD de shows, contenido digital, equipo, finanzas y hoja de ruta) están **completas y en producción**.
+ 
+ ---
+ 
+-## 🎯 Objetivo Actual: Completar el Planificador (Planner 5 vistas)
+-El Planner tiene un selector de vista (📅 Anual / 🗓 Calendario / 📊 Gantt / 🗂 Kanban) con cuatro vistas implementadas. Solo falta Carga de Equipo.
++## 🎯 Planificador (Planner): 5/5 vistas completas
++El Planner tiene las 5 vistas planeadas implementadas (📅 Anual / 🗓 Calendario / 📊 Gantt / 🗂 Kanban / 👥 Carga de Equipo). No queda ningún objetivo de vista pendiente; ver "Mejoras Transversales" para deuda técnica y pulido menor.
+ 
+ ### 📊 Resumen de las 5 Vistas
+ | Vista | Pregunta que responde | Estado |
+@@ -16,7 +16,7 @@ El Planner tiene un selector de vista (📅 Anual / 🗓 Calendario / 📊 Gantt
+ | 🗓 **Calendario** (B.4) | ¿Qué hay el día X exactamente? | ✅ **Completado** (grilla mensual, navegación ← →, chips con tooltip, modal creación con fecha pre-cargada). |
+ | 📊 **Gantt** (B.3) | ¿Hay choques de fechas? ¿Cómo se distribuye la carga? | ✅ **Completado** (barras unificadas shows + contenido, agrupado por show, zoom, colapsar grupos). Pendiente menor: edición inline por clic en barra. |
+ | 🗂 **Kanban** (B.2) | ¿En qué etapa está cada cosa? | ✅ **Completado** (toggle Shows/Contenido, columnas por estado, drag & drop con persistencia, respeta `canEdit`). |
+-| 👥 **Carga de Equipo** (B.5) | ¿Quién está sobrecargado? ¿Quién tiene espacio? | 🔴 **Pendiente (Prioridad 1 - única vista restante)** |
++| 👥 **Carga de Equipo** (B.5) | ¿Quién está sobrecargado? ¿Quién tiene espacio? | ✅ **Completado** (heatmap personas × período, toggle Semanas/Meses, indicador ✈️ viaja). |
+ 
+ ---
+ 
+@@ -80,31 +80,40 @@ El Planner tiene un selector de vista (📅 Anual / 🗓 Calendario / 📊 Gantt
+ 
+ ---
+ 
+-## ⚡ Fase 1: B.5 — Carga de Equipo (Heatmap) — Próximo Paso
+-### Descripción
+-Vista de planificación de dotación. Quinto tab en el selector.
++## ✅ B.5 — Carga de Equipo (Heatmap) (Completado)
++### Qué se implementó
++- Quinto y último tab "👥 Carga de Equipo" en `#pl-view-tabs`, con case en `_renderPlannerView()`.
++- **Granularidad con toggle (decisión: Ambas):** botones "🗞 Semanas" / "📆 Meses" (`plCargaSetGran`), reutilizando el estilo `.pl-kanban-toggle` ya existente. Semanas usa `weekKey`/`weekLabel` de `contenido.js` (lunes a domingo); meses usa `MESES`/año.
++- **Filas:** personas activas del equipo (`PERSONAS.filter(p=>p.activo)`).
++- **Columnas:** períodos generados dinámicamente entre la fecha mínima y máxima de todas las asignaciones (con `today` siempre incluido y padding de 1 período antes / algunos después).
++- **Celdas:** cuentan una asignación en cada período con el que se **superpone su rango de fechas** (no solo su fecha puntual) — para shows es 1 día puntual; para contenido es `fechaIdea→fecha` (todo el ciclo de preproducción + producción), igual criterio que el Gantt. Esto refleja mejor la carga real de trabajo que contar solo por fecha de entrega.
++- **Color:** heatmap de 5 niveles, `plCargaColor(count)` → 0 transparente, 1-2 verde (`--t50`/`--t200`), 3-4 ámbar (`--a100`/`--a400`), 5+ rojo (`--c400`).
++- **Indicador ✈️:** se muestra en la celda si alguna asignación superpuesta en ese período tiene `viaja:true`.
++- **Tooltip nativo:** `title` con el listado de nombres de shows/piezas que componen el número de esa celda.
++- Columna de persona y fila de encabezado con `position:sticky` para no perderse al hacer scroll horizontal/vertical en equipos o rangos grandes. Columna/celda del período actual resaltada con un borde violeta sutil (mismo criterio visual que "hoy" en Calendario/Gantt).
++- Respeta el filtro `#pl-filter-tabs` (todos/shows/contenido) — a diferencia de Kanban, aquí sí tiene sentido filtrar la carga solo por shows o solo por contenido.
+ 
+-### Requisitos Técnicos
+-1. **Filas:** Personas del equipo (`PERSONAS`).
+-2. **Columnas:** Semanas o meses.
+-3. **Celdas:** Cantidad de shows + piezas asignadas a esa persona en ese período.
+-4. **Color:** Heatmap verde claro → rojo intenso.
+-5. **Indicador:** Marcar semanas con `viaja: true` en la asignación.
++### Archivos modificados
++- `js/planner.js` — nuevas funciones `buildPlannerCarga`, `plCargaSetGran`, `plCargaResolveRange`, `plCargaColor`; nuevo estado `plCargaGran`; nuevo case `'carga'` en `_renderPlannerView()`.
++- `index.html` — agregado botón "👥 Carga de Equipo" en `#pl-view-tabs`.
++- `css/app.css` — estilos para `.pl-carga-wrap`, `.pl-carga-table`, `.pl-carga-th-persona`/`.pl-carga-td-persona` (sticky), `.pl-carga-persona-row`, `.pl-carga-av`, `.pl-carga-cell`, `.pl-carga-viaje`, `.pl-carga-col-today`.
+ 
+ ---
+ 
+ ## 🔧 Mejoras Transversales (Backlog Técnico)
+ - **Filtros del Planner:** Añadir filtros por **Estado** (multiselect) y **Rango de Fechas** a todas las vistas (actualmente solo existe filtro por tipo: todos/shows/contenido).
+ - **Edición inline en Gantt:** Implementar clic en barra → `input date` inline para mover fechas sin abrir el detalle (ver nota en sección B.3).
++- **Drill-down en Carga de Equipo:** Hoy el detalle de una celda solo se ve en el `title` (tooltip nativo). Podría mejorarse con un clic que abra un modal/lista con los shows y piezas de ese período (ver nota en sección B.5).
+ - **Debt Técnica:** Eliminar `persistContenido()` (marcada como `OBSOLETA` en el código) cuando sea oportuno.
+ - **Debt Técnica:** `groupItemsByWeek(items, getFecha)` en `planner.js` no tiene ningún llamador (código muerto, quedó de una versión anterior de B.4). Evaluar eliminarla o reaprovecharla; no confundir con `groupByWeek(items)` de `contenido.js`, que sí está en uso.
+ 
+ ---
+ 
+-## 📌 Funciones clave del Planner (referencia para próximas vistas)
+-- `_renderPlannerView()` — dispatcher central; llamar desde `nav()` y cualquier nueva vista.
++## 📌 Funciones clave del Planner (mapa de referencia)
++- `_renderPlannerView()` — dispatcher central; llamar desde `nav()` y cualquier vista nueva que se agregue a futuro.
+ - `equipoStackHTML(entityType, entityId, max)` — avatares del equipo, disponible en `equipo.js`.
+ - `goToShow(idx)` / `openCdDetail(id)` — puntos de entrada al detalle desde el Planner.
+-- `buildPlannerGantt()` — en `planner.js`, Gantt unificado (B.3, completado).
+-- `buildPlannerKanban()` — en `planner.js`, Kanban unificado (B.2, completado); patrón de toggle Shows/Contenido y de `UPDATE` puntual por `canEdit` reutilizable para Carga de Equipo (B.5).
++- `buildPlannerGantt()` — en `planner.js`, Gantt unificado (B.3).
++- `buildPlannerKanban()` — en `planner.js`, Kanban unificado (B.2).
++- `buildPlannerCarga()` — en `planner.js`, heatmap de carga de equipo (B.5); `plCargaResolveRange()` resuelve el rango de fechas de una asignación (show o contenido) con la misma lógica que el Gantt — reutilizable si se agrega alguna vista nueva basada en rangos de fecha.
+ - `buildContenidoGantt()` — en `contenido.js`, Gantt específico del módulo de Contenido Digital (independiente del Gantt unificado del Planner).
