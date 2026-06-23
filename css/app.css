@@ -334,6 +334,16 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .media-empty{text-align:center;padding:30px;color:#ccc;font-size:12px;}
 .media-counter{font-size:10px;color:#9690C2;margin-left:6px;}
 
+/* ── GANTT: datepicker inline ── */
+.pl-gantt-datepicker{position:fixed;z-index:1000;background:var(--surface2);border:0.5px solid var(--border-soft);border-radius:10px;padding:12px 14px;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:200px;}
+.pl-gantt-dp-label{font-size:11px;font-weight:600;color:#E4E1F7;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;}
+.pl-gantt-dp-input{width:100%;padding:5px 8px;border-radius:6px;border:0.5px solid var(--border-soft);background:var(--surface);color:#E4E1F7;font-size:12px;font-family:var(--font);box-sizing:border-box;margin-bottom:8px;}
+.pl-gantt-dp-input:focus{outline:none;border-color:var(--p400);}
+.pl-gantt-dp-btns{display:flex;gap:6px;}
+.pl-gantt-dp-ok{flex:1;padding:5px 0;border-radius:6px;border:none;background:var(--p400);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.pl-gantt-dp-ok:hover{background:var(--p600);}
+.pl-gantt-dp-cancel{padding:5px 10px;border-radius:6px;border:0.5px solid var(--border-soft);background:transparent;color:#888;font-size:11px;cursor:pointer;font-family:var(--font);}
+
 /* ── GANTT ── */
 .gantt-controls{display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:7px 12px;background:var(--surface);border:0.5px solid var(--border-soft);border-radius:8px;margin-top:14px;margin-bottom:4px;}
 .gantt-control-item{display:flex;align-items:center;gap:8px;font-size:11px;color:#B7B2DA;}

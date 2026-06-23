@@ -379,6 +379,7 @@ function buildPlannerGantt(){
   const showFilter=plActiveFilter==='todos'||plActiveFilter==='shows';
   const contFilter=plActiveFilter==='todos'||plActiveFilter==='contenido';
 
+  const canEditGantt=!!(currentUser&&ROLE_DEFS[currentUser.rol]?.canEdit);
   if(!_plGanttZoomTouched){_plGanttDayWidth=window.innerWidth<640?14:28;_plGanttRowHeight=window.innerWidth<640?32:40;}
 
   // ── Resolver fechas de cada ítem ──
@@ -508,7 +509,8 @@ function buildPlannerGantt(){
         const c=showColor(row.s.tipo,row.s.estado);
         const showLabel=width>50;
         labelRowsHTML.push(`<div onclick="goToShow(${row.realIdx})" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight<34?'10px':'11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${row.s.nombre}">🎤 ${row.s.nombre}</div>`);
-        barsHTML.push(`<div onclick="goToShow(${row.realIdx})" title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)}" style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px solid ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
+        const showBarData=canEditGantt?` data-gantt-edit="show" data-gantt-idx="${row.realIdx}" data-gantt-fecha="${row.s.fecha}" data-gantt-nombre="${row.s.nombre.replace(/"/g,'&quot;')}"`:'';
+        barsHTML.push(`<div ${canEditGantt?'':'onclick="goToShow('+row.realIdx+')"'} title="🎤 ${row.s.nombre} · ${fmtDate(row.s.fecha)} ${canEditGantt?'· Clic para editar fecha':''}"${showBarData} style="position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${barH}px;background:${c.bg};border:2px solid ${c.txt};border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:${c.txt};font-weight:700;box-shadow:0 1px 6px rgba(0,0,0,0.3);">🎤</div>`);
       } else {
         // Barra de contenido: doble tramo si tiene preproducción
         labelRowsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" style="height:${rowHeight}px;display:flex;align-items:center;padding:0 10px 0 22px;font-size:${rowHeight<34?'10px':'11px'};color:#E4E1F7;border-bottom:0.5px solid var(--border-soft);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${row.it.nombre}">${row.it.nombre}</div>`);
@@ -521,12 +523,14 @@ function buildPlannerGantt(){
           const prodOff=Math.round((row.ini-minDate)/(1000*60*60*24));
           const prodDur=Math.max(Math.round((row.fin-row.ini)/(1000*60*60*24))+1,1);
           const prodW=Math.max(prodDur*dayWidth-4,dayWidth-4);
-          barsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" title="${row.it.nombre} · Producción: ${fmtDate(row.it.fechaInicio)} → ${fmtDate(row.it.fecha)}" style="position:absolute;left:${prodOff*dayWidth}px;top:${top}px;width:${prodW}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:0 6px 6px 0;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${prodW>60?(cdEstEmoji(row.it.estado)+' '+row.it.nombre):cdEstEmoji(row.it.estado)}</div>`);
+          const prodBarData=canEditGantt?` data-gantt-edit="contenido-fecha" data-gantt-id="${row.it.id}" data-gantt-fecha="${row.it.fecha||''}" data-gantt-nombre="${row.it.nombre.replace(/"/g,'&quot;')}"`:'';
+          barsHTML.push(`<div ${canEditGantt?'':'onclick="openCdDetail(''+row.it.id+'')"'} title="${row.it.nombre} · Producción: ${fmtDate(row.it.fechaInicio)} → ${fmtDate(row.it.fecha)} ${canEditGantt?'· Clic para editar fecha de entrega':''}"${prodBarData} style="position:absolute;left:${prodOff*dayWidth}px;top:${top}px;width:${prodW}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:0 6px 6px 0;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${prodW>60?(cdEstEmoji(row.it.estado)+' '+row.it.nombre):cdEstEmoji(row.it.estado)}</div>`);
         } else {
           const off=Math.round((row.ini-minDate)/(1000*60*60*24));
           const dur=Math.max(Math.round((row.fin-row.ini)/(1000*60*60*24))+1,1);
           const w=Math.max(dur*dayWidth-4,dayWidth-4);
-          barsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" title="${row.it.nombre} · ${fmtDate(row.it.fecha||row.it.fechaInicio)}" style="position:absolute;left:${off*dayWidth+2}px;top:${top}px;width:${w}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:6px;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${w>60?(cdEstEmoji(row.it.estado)+' '+row.it.nombre):cdEstEmoji(row.it.estado)}</div>`);
+          const singleBarData=canEditGantt?` data-gantt-edit="contenido-fecha" data-gantt-id="${row.it.id}" data-gantt-fecha="${row.it.fecha||''}" data-gantt-nombre="${row.it.nombre.replace(/"/g,'&quot;')}"`:'';
+          barsHTML.push(`<div ${canEditGantt?'':'onclick="openCdDetail(''+row.it.id+'')"'} title="${row.it.nombre} · ${fmtDate(row.it.fecha||row.it.fechaInicio)} ${canEditGantt?'· Clic para editar fecha':''}"${singleBarData} style="position:absolute;left:${off*dayWidth+2}px;top:${top}px;width:${w}px;height:${barH}px;background:${color};opacity:${opacity};border-radius:6px;cursor:pointer;display:flex;align-items:center;padding:0 6px;font-size:10px;color:#fff;font-weight:600;overflow:hidden;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${w>60?(cdEstEmoji(row.it.estado)+' '+row.it.nombre):cdEstEmoji(row.it.estado)}</div>`);
         }
       }
       cursorY+=rowHeight;
@@ -569,6 +573,83 @@ function buildPlannerGantt(){
     <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:repeating-linear-gradient(135deg,#9690C255 0px,#9690C255 4px,#9690C222 4px,#9690C222 8px);border:1px solid #9690C288;display:inline-block;"></span>Preproducción</span>
     <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:8px;border-radius:2px;background:#9690C2;display:inline-block;"></span>Producción</span>
   </div>`;
+  grid.querySelectorAll('[data-gantt-edit]').forEach(el=>el.addEventListener('click',plGanttBarClick));
+}
+
+// ── GANTT: EDICIÓN INLINE DE FECHA ──
+function plGanttBarClick(e){
+  e.stopPropagation();
+  const el=e.currentTarget;
+  const tipo=el.dataset.ganttEdit; // 'show' | 'contenido-fecha'
+  const fechaActual=el.dataset.ganttFecha||'';
+  const nombre=el.dataset.ganttNombre||'';
+
+  // Remover picker previo si existe
+  const prev=document.getElementById('pl-gantt-datepicker'); if(prev)prev.remove();
+
+  const rect=el.getBoundingClientRect();
+  const picker=document.createElement('div');
+  picker.id='pl-gantt-datepicker';
+  picker.className='pl-gantt-datepicker';
+  picker.innerHTML=`
+    <div class="pl-gantt-dp-label">${nombre}</div>
+    <input id="pl-gantt-dp-input" type="date" class="pl-gantt-dp-input" value="${fechaActual}">
+    <div class="pl-gantt-dp-btns">
+      <button class="pl-gantt-dp-ok">✓ Guardar</button>
+      <button class="pl-gantt-dp-cancel">✕</button>
+    </div>`;
+
+  // Posicionar sobre la barra
+  picker.style.position='fixed';
+  picker.style.top=(rect.bottom+4)+'px';
+  picker.style.left=Math.min(rect.left, window.innerWidth-220)+'px';
+  document.body.appendChild(picker);
+
+  const input=document.getElementById('pl-gantt-dp-input');
+  input.focus();
+
+  const close=()=>{ const p=document.getElementById('pl-gantt-datepicker'); if(p)p.remove(); };
+
+  picker.querySelector('.pl-gantt-dp-cancel').addEventListener('click',close);
+  picker.querySelector('.pl-gantt-dp-ok').addEventListener('click',async()=>{
+    const nuevaFecha=input.value;
+    if(!nuevaFecha){close();return;}
+    if(nuevaFecha===fechaActual){
+      // Sin cambio → navegar al detalle
+      if(tipo==='show') goToShow(parseInt(el.dataset.ganttIdx));
+      else openCdDetail(el.dataset.ganttId);
+      close(); return;
+    }
+    close();
+    if(tipo==='show'){
+      const idx=parseInt(el.dataset.ganttIdx);
+      const s=SHOWS[idx];
+      if(!s)return;
+      const prev=s.fecha;
+      s.fecha=nuevaFecha;
+      buildPlannerGantt();
+      try{
+        const{error}=await sb.from('shows').update({fecha:nuevaFecha}).eq('id',s.id);
+        if(error){ s.fecha=prev; buildPlannerGantt(); toast('⚠️ Error guardando fecha: '+error.message); }
+        else toast('✅ Fecha actualizada → '+fmtDate(nuevaFecha));
+      }catch(err){ s.fecha=prev; buildPlannerGantt(); toast('⚠️ Error de conexión'); }
+    } else {
+      // contenido: updateCdField ya maneja la persistencia y el toast
+      const id=el.dataset.ganttId;
+      const it=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).find(c=>String(c.id)===String(id));
+      if(!it)return;
+      it.fecha=nuevaFecha;
+      await updateCdField(id,'fecha',nuevaFecha);
+      buildPlannerGantt();
+    }
+  });
+
+  // Cerrar al clickear afuera
+  setTimeout(()=>document.addEventListener('click',function h(ev){
+    if(!document.getElementById('pl-gantt-datepicker')?.contains(ev.target)){
+      close(); document.removeEventListener('click',h);
+    }
+  }),50);
 }
 
 // ── VISTA KANBAN POR ESTADO (B.2) ──

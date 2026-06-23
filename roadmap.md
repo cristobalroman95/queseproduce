@@ -119,7 +119,7 @@ El Planner tiene las 5 vistas planeadas implementadas (📅 Anual / 🗓 Calenda
 ---
 
 ## 🔧 Mejoras Transversales (Backlog Técnico)
-- **Edición inline en Gantt:** Implementar clic en barra → `input date` inline para mover fechas sin abrir el detalle (ver nota en sección B.3).
+- **Edición inline en Gantt:** ✅ Clic en barra (solo roles con `canEdit`) abre un datepicker flotante. Guardar persiste con `UPDATE` puntual (shows) o `updateCdField` (contenido) y re-renderiza el Gantt. Sin cambio de fecha → navega al detalle. Función: `plGanttBarClick()`.
 - **Drill-down en Carga de Equipo:** ✅ Clic en celda con carga > 0 abre modal `#pl-carga-modal` con lista clickeable de shows/piezas del período. Función: `plCargaDrilldown()`.
 
 ### ✅ Completados (Patch 22-jun-2026)
