@@ -532,12 +532,14 @@ function buildPlannerGantt() {
         const fieldsJSON = JSON.stringify(fields).replace(/"/g, '&quot;');
 
         if (row.hasPrep) {
+          
           // Barra de preproducción (rayada) → target = fechaIdea
-          const prepOff = Math.round((row.idea - minDate) / (1000 * 60 * 60 * 24));
-          const prepDur = Math.max(Math.round((row.ini - row.idea) / (1000 * 60 * 60 * 24)), 1);
-          barsHTML.push(`<div onclick="openCdDetail('${row.it.id}')" title="Preproducción: ${fmtDate(row.it.fechaIdea)} → ${fmtDate(row.it.fechaInicio)}" style="position:absolute;left:${prepOff * dayWidth + 2}px;top:${top}px;width:${Math.max(prepDur * dayWidth - 2, 6)}px;height:${barH}px;background:repeating-linear-gradient(135deg,${color}55 0px,${color}55 4px,${color}22 4px,${color}22 8px);border:1px solid ${color}88;border-radius:6px 0 0 6px;cursor:pointer;box-sizing:border-box;"></div>`);
-
-          // Barra de producción (sólida) → target = fecha
+            const prepOff = Math.round((row.idea - minDate) / (1000 * 60 * 60 * 24));
+            const prepDur = Math.max(Math.round((row.ini - row.idea) / (1000 * 60 * 60 * 24)), 1);
+            const prepBarData = canEditGantt ? ` data-gantt-edit="contenido" data-gantt-target="fechaIdea" data-gantt-id="${row.it.id}" data-gantt-fields='${fieldsJSON}' data-gantt-nombre="${row.it.nombre.replace(/"/g, '&quot;')}"` : '';
+            barsHTML.push(`<div ${canEditGantt ? '' : 'onclick="openCdDetail(\'' + row.it.id + '\')"'} title="Preproducción: ${fmtDate(row.it.fechaIdea)} → ${fmtDate(row.it.fechaInicio)} ${canEditGantt ? '· Clic para editar fechas' : ''}"${prepBarData} style="position:absolute;left:${prepOff * dayWidth + 2}px;top:${top}px;width:${Math.max(prepDur * dayWidth - 2, 6)}px;height:${barH}px;background:repeating-linear-gradient(135deg,${color}55 0px,${color}55 4px,${color}22 4px,${color}22 8px);border:1px solid ${color}88;border-radius:6px 0 0 6px;cursor:pointer;box-sizing:border-box;"></div>`);
+          
+            // Barra de producción (sólida) → target = fecha
           const prodOff = Math.round((row.ini - minDate) / (1000 * 60 * 60 * 24));
           const prodDur = Math.max(Math.round((row.fin - row.ini) / (1000 * 60 * 60 * 24)) + 1, 1);
           const prodW = Math.max(prodDur * dayWidth - 4, dayWidth - 4);
