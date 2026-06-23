@@ -414,6 +414,18 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
 .pl-view-tab.active{background:var(--p400);color:#fff;border-color:var(--p400);}
 .pl-view-tab:hover:not(.active){background:var(--g100);}
 
+/* ── PLANNER: Filtros Avanzados (Estado + Rango Fechas) ── */
+.pl-adv-filtros{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:0.5px solid var(--border-soft);border-radius:8px;margin-bottom:12px;}
+.pl-adv-label{font-size:10px;font-weight:700;color:#9690C2;text-transform:uppercase;letter-spacing:0.4px;flex-shrink:0;}
+.pl-adv-estados{display:flex;flex-wrap:wrap;gap:5px;}
+.pl-adv-estado-btn{padding:3px 10px;border-radius:14px;border:0.5px solid var(--border-soft);background:transparent;color:#9690C2;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .12s;}
+.pl-adv-estado-btn.active{background:var(--p400);color:#fff;border-color:var(--p400);}
+.pl-adv-estado-btn:hover:not(.active){background:var(--g100);}
+.pl-adv-date{padding:3px 8px;border-radius:6px;border:0.5px solid var(--border-soft);background:var(--surface2);color:#E4E1F7;font-size:10px;font-family:var(--font);cursor:pointer;}
+.pl-adv-date:focus{outline:none;border-color:var(--p400);}
+.pl-adv-clear{padding:3px 10px;border-radius:14px;border:0.5px solid var(--r400,#e06c6c);background:transparent;color:var(--r400,#e06c6c);font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .12s;margin-left:auto;}
+.pl-adv-clear:hover{background:rgba(224,108,108,0.12);}
+
 /* ── PLANNER: vista Kanban (B.2) ── */
 .pl-kanban-toggle{display:flex;gap:8px;margin-bottom:14px;}
 .pl-kanban-toggle-btn{padding:6px 16px;border-radius:20px;border:0.5px solid var(--border-soft);background:transparent;color:#9690C2;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;}

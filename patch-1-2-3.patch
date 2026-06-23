@@ -1,0 +1,254 @@
+diff --git a/css/app.css b/css/app.css
+index 36f8b07..d02d59d 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -414,6 +414,18 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
+ .pl-view-tab.active{background:var(--p400);color:#fff;border-color:var(--p400);}
+ .pl-view-tab:hover:not(.active){background:var(--g100);}
+ 
++/* ── PLANNER: Filtros Avanzados (Estado + Rango Fechas) ── */
++.pl-adv-filtros{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border:0.5px solid var(--border-soft);border-radius:8px;margin-bottom:12px;}
++.pl-adv-label{font-size:10px;font-weight:700;color:#9690C2;text-transform:uppercase;letter-spacing:0.4px;flex-shrink:0;}
++.pl-adv-estados{display:flex;flex-wrap:wrap;gap:5px;}
++.pl-adv-estado-btn{padding:3px 10px;border-radius:14px;border:0.5px solid var(--border-soft);background:transparent;color:#9690C2;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .12s;}
++.pl-adv-estado-btn.active{background:var(--p400);color:#fff;border-color:var(--p400);}
++.pl-adv-estado-btn:hover:not(.active){background:var(--g100);}
++.pl-adv-date{padding:3px 8px;border-radius:6px;border:0.5px solid var(--border-soft);background:var(--surface2);color:#E4E1F7;font-size:10px;font-family:var(--font);cursor:pointer;}
++.pl-adv-date:focus{outline:none;border-color:var(--p400);}
++.pl-adv-clear{padding:3px 10px;border-radius:14px;border:0.5px solid var(--r400,#e06c6c);background:transparent;color:var(--r400,#e06c6c);font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .12s;margin-left:auto;}
++.pl-adv-clear:hover{background:rgba(224,108,108,0.12);}
++
+ /* ── PLANNER: vista Kanban (B.2) ── */
+ .pl-kanban-toggle{display:flex;gap:8px;margin-bottom:14px;}
+ .pl-kanban-toggle-btn{padding:6px 16px;border-radius:20px;border:0.5px solid var(--border-soft);background:transparent;color:#9690C2;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;}
+diff --git a/js/planner.js b/js/planner.js
+index 4155cf7..8b2b6bf 100644
+--- a/js/planner.js
++++ b/js/planner.js
+@@ -4,6 +4,10 @@ const DIAS_SEMANA=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+ 
+ let plActiveFilter='todos';
+ let plActiveView='anual';   // 'anual' | 'calendario' | 'gantt' | 'kanban'
++// ── Filtros avanzados del Planner ──
++let plFiltroEstados=[];     // [] = todos; si tiene valores, filtra por estado
++let plFiltroFechaIni=null;  // string 'YYYY-MM-DD' o null
++let plFiltroFechaFin=null;  // string 'YYYY-MM-DD' o null
+ let calYear=new Date().getFullYear();
+ let calMonth=new Date().getMonth(); // 0-indexed
+ let coordActiveFilter='proximos';
+@@ -30,26 +34,87 @@ function showColor(tipo,estado){
+   return{bg:"#E6F1FB",txt:"#0C447C"};
+ }
+ 
+-// ── FUNCIÓN REUTILIZABLE: agrupar items por semana ──
+-function groupItemsByWeek(items, getFecha){
+-  const weeks=[];
+-  const weekMap={};
+-  items.forEach(item=>{
+-    const fecha=getFecha(item);
+-    if(!fecha)return;
+-    const d=new Date(fecha+"T12:00:00");
+-    const dow=d.getDay(); // 0=Dom
+-    const monday=new Date(d); monday.setDate(d.getDate()-(dow===0?6:dow-1));
+-    const sunday=new Date(monday); sunday.setDate(monday.getDate()+6);
+-    const key=monday.toISOString().slice(0,10);
+-    if(!weekMap[key]){
+-      weekMap[key]={key,monday:new Date(monday),sunday:new Date(sunday),items:[]};
+-      weeks.push(weekMap[key]);
+-    }
+-    weekMap[key].items.push(item);
+-  });
+-  weeks.sort((a,b)=>a.key.localeCompare(b.key));
+-  return weeks;
++// ── FILTROS AVANZADOS ──
++function plToggleEstado(estado){
++  const idx=plFiltroEstados.indexOf(estado);
++  if(idx===-1)plFiltroEstados.push(estado);
++  else plFiltroEstados.splice(idx,1);
++  _renderPlannerView();
++}
++function plSetFechaIni(v){ plFiltroFechaIni=v||null; _renderPlannerView(); }
++function plSetFechaFin(v){ plFiltroFechaFin=v||null; _renderPlannerView(); }
++function plLimpiarFiltrosAvanzados(){
++  plFiltroEstados=[];
++  plFiltroFechaIni=null; plFiltroFechaFin=null;
++  document.querySelectorAll('.pl-adv-estado-btn').forEach(b=>b.classList.remove('active'));
++  const fi=document.getElementById('pl-fi');const ff=document.getElementById('pl-ff');
++  if(fi)fi.value='';if(ff)ff.value='';
++  _renderPlannerView();
++}
++
++// Devuelve true si un item pasa el filtro de rango de fechas
++// fecha puede ser string 'YYYY-MM-DD' o Date
++function _plFechaEnRango(fechaStr){
++  if(!fechaStr)return !plFiltroFechaIni&&!plFiltroFechaFin;
++  const f=fechaStr.slice(0,10);
++  if(plFiltroFechaIni&&f<plFiltroFechaIni)return false;
++  if(plFiltroFechaFin&&f>plFiltroFechaFin)return false;
++  return true;
++}
++// Devuelve true si un rango (ini,fin como Date) se superpone con el filtro de fechas
++function _plRangoEnFiltro(ini,fin){
++  if(!plFiltroFechaIni&&!plFiltroFechaFin)return true;
++  const fi=plFiltroFechaIni?new Date(plFiltroFechaIni+'T00:00:00'):null;
++  const ff=plFiltroFechaFin?new Date(plFiltroFechaFin+'T23:59:59'):null;
++  if(fi&&fin<fi)return false;
++  if(ff&&ini>ff)return false;
++  return true;
++}
++// Devuelve true si un show pasa ambos filtros avanzados
++function _plShowPasaFiltros(s){
++  if(plFiltroEstados.length&&!plFiltroEstados.includes(s.estado||'Tentativo'))return false;
++  if(!_plFechaEnRango(s.fecha))return false;
++  return true;
++}
++// Devuelve true si un item de contenido pasa ambos filtros avanzados
++function _plContPasaFiltros(c){
++  if(plFiltroEstados.length&&!plFiltroEstados.includes(c.estado))return false;
++  // rango efectivo del contenido
++  const ini=new Date((c.fechaIdea||c.fechaInicio||c.fecha||'9999')+'T12:00:00');
++  const fin=new Date((c.fecha||c.fechaInicio||c.fechaIdea||'0000')+'T12:00:00');
++  if(!_plRangoEnFiltro(ini,fin))return false;
++  return true;
++}
++
++// Construye el bloque HTML de filtros avanzados (estados + rango fechas)
++function _plAdvFiltrosHTML(modoKanban){
++  if(modoKanban)return ''; // Kanban tiene su propio toggle
++  // Qué estados mostrar según el modo activo
++  const showMode=plActiveFilter==='todos'||plActiveFilter==='shows';
++  const contMode=plActiveFilter==='todos'||plActiveFilter==='contenido';
++  let estadosBtns='';
++  if(showMode){
++    estadosBtns+=SHOW_ESTADOS.map(e=>{
++      const active=plFiltroEstados.includes(e)?'active':'';
++      return`<button class="pl-adv-estado-btn ${active}" onclick="plToggleEstado('${e}')" title="Filtrar por estado show">${e}</button>`;
++    }).join('');
++  }
++  if(contMode&&typeof CD_ESTADOS!=='undefined'){
++    estadosBtns+=CD_ESTADOS.map(e=>{
++      const active=plFiltroEstados.includes(e)?'active':'';
++      return`<button class="pl-adv-estado-btn ${active}" onclick="plToggleEstado('${e}')" title="Filtrar por estado contenido">${e}</button>`;
++    }).join('');
++  }
++  const hayFiltros=plFiltroEstados.length||plFiltroFechaIni||plFiltroFechaFin;
++  return`<div class="pl-adv-filtros" id="pl-adv-filtros">
++    <span class="pl-adv-label">Estado:</span>
++    <div class="pl-adv-estados">${estadosBtns}</div>
++    <span class="pl-adv-label" style="margin-left:10px;">Desde:</span>
++    <input id="pl-fi" type="date" class="pl-adv-date" value="${plFiltroFechaIni||''}" onchange="plSetFechaIni(this.value)">
++    <span class="pl-adv-label">Hasta:</span>
++    <input id="pl-ff" type="date" class="pl-adv-date" value="${plFiltroFechaFin||''}" onchange="plSetFechaFin(this.value)">
++    ${hayFiltros?`<button class="pl-adv-clear" onclick="plLimpiarFiltrosAvanzados()">✕ Limpiar</button>`:''}
++  </div>`;
+ }
+ 
+ // ── FILTRO Y VISTA ──
+@@ -72,6 +137,17 @@ function plSetView(v,btn){
+   _renderPlannerView();
+ }
+ function _renderPlannerView(){
++  // Inyectar/actualizar bloque de filtros avanzados
++  const isKanban=plActiveView==='kanban';
++  let advWrap=document.getElementById('pl-adv-wrap');
++  if(!advWrap){
++    advWrap=document.createElement('div');
++    advWrap.id='pl-adv-wrap';
++    const grid=document.getElementById('planner-grid');
++    if(grid&&grid.parentNode)grid.parentNode.insertBefore(advWrap,grid);
++  }
++  advWrap.innerHTML=_plAdvFiltrosHTML(isKanban);
++
+   if(plActiveView==='calendario') buildPlannerCalendario();
+   else if(plActiveView==='gantt') buildPlannerGantt();
+   else if(plActiveView==='kanban') buildPlannerKanban();
+@@ -85,8 +161,8 @@ function buildPlanner(){
+   const showFilter=plActiveFilter==='todos'||plActiveFilter==='shows';
+   const contFilter=plActiveFilter==='todos'||plActiveFilter==='contenido';
+   grid.innerHTML=MESES.map((mes,mi)=>{
+-    const mShows=showFilter?SHOWS.map((s,realIdx)=>({s,realIdx})).filter(o=>{ if(!o.s.fecha)return false; return parseInt(o.s.fecha.split("-")[1])===mi+1; }):[];
+-    const mCont=contFilter?(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).filter(c=>{ if(!c.fecha)return false; return parseInt(c.fecha.split("-")[1])===mi+1; }):[];
++    const mShows=showFilter?SHOWS.map((s,realIdx)=>({s,realIdx})).filter(o=>{ if(!o.s.fecha)return false; if(!_plShowPasaFiltros(o.s))return false; return parseInt(o.s.fecha.split("-")[1])===mi+1; }):[];
++    const mCont=contFilter?(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).filter(c=>{ if(!c.fecha)return false; if(!_plContPasaFiltros(c))return false; return parseInt(c.fecha.split("-")[1])===mi+1; }):[];
+     const combined=[...mShows.map(o=>({type:'show',day:parseInt(o.s.fecha.split("-")[2]),data:o})),...mCont.map(c=>({type:'content',day:parseInt(c.fecha.split("-")[2]),data:c}))].sort((a,b)=>a.day-b.day);
+     const inner=combined.length?combined.map(entry=>{
+       if(entry.type==='show'){ const {s,realIdx}=entry.data; const c=showColor(s.tipo,s.estado); const dia=s.fecha?s.fecha.split("-")[2]:"??"; return`<div class="cal-show" style="background:${c.bg};color:${c.txt}" onclick="goToShow(${realIdx})" title="Ver ${s.nombre.replace(/"/g,'&quot;')}"><div class="cs-date">🎤 Día ${dia}</div><div class="cs-name">${s.nombre}</div></div>`; }
+@@ -135,6 +211,7 @@ function buildPlannerCalendario(){
+   if(showFilter){
+     SHOWS.forEach((s,realIdx)=>{
+       if(!s.fecha)return;
++      if(!_plShowPasaFiltros(s))return;
+       if(parseInt(s.fecha.slice(5,7))===calMonth+1&&parseInt(s.fecha.slice(0,4))===calYear){
+         addToDay(s.fecha,{type:'show',data:{s,realIdx}});
+       }
+@@ -143,6 +220,7 @@ function buildPlannerCalendario(){
+   if(contFilter&&typeof CONTENIDO!=='undefined'){
+     CONTENIDO.forEach(c=>{
+       if(!c.fecha)return;
++      if(!_plContPasaFiltros(c))return;
+       if(parseInt(c.fecha.slice(5,7))===calMonth+1&&parseInt(c.fecha.slice(0,4))===calYear){
+         addToDay(c.fecha,{type:'content',data:c});
+       }
+@@ -309,6 +387,7 @@ function buildPlannerGantt(){
+   if(showFilter){
+     SHOWS.forEach((s,realIdx)=>{
+       if(!s.fecha)return;
++      if(!_plShowPasaFiltros(s))return;
+       const d=new Date(s.fecha+'T12:00:00');
+       resolved.push({kind:'show',realIdx,s,ini:d,fin:d,label:s.nombre,color:showGanttColor(s.tipo,s.estado)});
+     });
+@@ -322,6 +401,7 @@ function buildPlannerGantt(){
+       if(!ini&&!fin)return;
+       if(idea>ini){const t=idea;idea=ini;ini=t;}
+       if(ini>fin){const t=ini;ini=fin;fin=t;}
++      if(!_plContPasaFiltros(it))return;
+       const hasPrep=!!(it.fechaIdea&&it.fechaInicio);
+       resolved.push({kind:'contenido',it,ini,fin,idea,hasPrep,label:it.nombre,color:cdGanttColor(it.tipo)});
+     });
+@@ -647,9 +727,23 @@ function buildPlannerCarga(){
+ 
+   // ── Resolver rango de fechas de cada asignación ──
+   const resolved=ASIGNACIONES
+-    .filter(a=>(a.entityType==='show'&&showFilter)||(a.entityType==='contenido'&&contFilter))
++    .filter(a=>{
++      if(!((a.entityType==='show'&&showFilter)||(a.entityType==='contenido'&&contFilter)))return false;
++      // Filtro de estado avanzado: buscar el item y verificar
++      if(plFiltroEstados.length){
++        if(a.entityType==='show'){
++          const s=SHOWS.find(x=>String(x.id)===String(a.entityId));
++          if(!s||!plFiltroEstados.includes(s.estado||'Tentativo'))return false;
++        } else {
++          const c=(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).find(x=>String(x.id)===String(a.entityId));
++          if(!c||!plFiltroEstados.includes(c.estado))return false;
++        }
++      }
++      return true;
++    })
+     .map(a=>{ const r=plCargaResolveRange(a.entityType,a.entityId); return r?{a,...r}:null; })
+-    .filter(Boolean);
++    .filter(Boolean)
++    .filter(r=>_plRangoEnFiltro(r.ini,r.fin));
+ 
+   const today=new Date();today.setHours(12,0,0,0);
+   let minDate=resolved.length?new Date(Math.min(...resolved.map(r=>+r.ini))):new Date(today);
+diff --git a/roadmap.md b/roadmap.md
+index 15b589e..de80b2c 100644
+--- a/roadmap.md
++++ b/roadmap.md
+@@ -119,11 +119,13 @@ El Planner tiene las 5 vistas planeadas implementadas (📅 Anual / 🗓 Calenda
+ ---
+ 
+ ## 🔧 Mejoras Transversales (Backlog Técnico)
+-- **Filtros del Planner:** Añadir filtros por **Estado** (multiselect) y **Rango de Fechas** a todas las vistas (actualmente solo existe filtro por tipo: todos/shows/contenido).
+ - **Edición inline en Gantt:** Implementar clic en barra → `input date` inline para mover fechas sin abrir el detalle (ver nota en sección B.3).
+ - **Drill-down en Carga de Equipo:** Hoy el detalle de una celda solo se ve en el `title` (tooltip nativo). Podría mejorarse con un clic que abra un modal/lista con los shows y piezas de ese período (ver nota en sección B.5).
+-- **Debt Técnica:** Eliminar `persistContenido()` (marcada como `OBSOLETA` en el código) cuando sea oportuno.
+-- **Debt Técnica:** `groupItemsByWeek(items, getFecha)` en `planner.js` no tiene ningún llamador (código muerto, quedó de una versión anterior de B.4). Evaluar eliminarla o reaprovecharla; no confundir con `groupByWeek(items)` de `contenido.js`, que sí está en uso.
++
++### ✅ Completados (Patch 22-jun-2026)
++- **Filtros del Planner:** ✅ Implementados filtros por **Estado** (multiselect) y **Rango de Fechas** en todas las vistas (Anual, Calendario, Gantt, Carga de Equipo). El bloque `.pl-adv-filtros` se inyecta via `_renderPlannerView()` en `#pl-adv-wrap`. Funciones: `plToggleEstado`, `plSetFechaIni`, `plSetFechaFin`, `plLimpiarFiltrosAvanzados`, `_plShowPasaFiltros`, `_plContPasaFiltros`, `_plFechaEnRango`, `_plRangoEnFiltro`. No aplica en Kanban (usa su propio toggle).
++- **Debt Técnica:** ✅ `persistContenido()` ya no existía en el código; eliminada la referencia del backlog.
++- **Debt Técnica:** ✅ Eliminada `groupItemsByWeek(items, getFecha)` de `planner.js` (era código muerto sin ningún llamador). No confundir con `groupByWeek(items)` de `contenido.js`, que sí sigue en uso.
+ 
+ ---
+ 

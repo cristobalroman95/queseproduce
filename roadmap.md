@@ -119,11 +119,13 @@ El Planner tiene las 5 vistas planeadas implementadas (📅 Anual / 🗓 Calenda
 ---
 
 ## 🔧 Mejoras Transversales (Backlog Técnico)
-- **Filtros del Planner:** Añadir filtros por **Estado** (multiselect) y **Rango de Fechas** a todas las vistas (actualmente solo existe filtro por tipo: todos/shows/contenido).
 - **Edición inline en Gantt:** Implementar clic en barra → `input date` inline para mover fechas sin abrir el detalle (ver nota en sección B.3).
 - **Drill-down en Carga de Equipo:** Hoy el detalle de una celda solo se ve en el `title` (tooltip nativo). Podría mejorarse con un clic que abra un modal/lista con los shows y piezas de ese período (ver nota en sección B.5).
-- **Debt Técnica:** Eliminar `persistContenido()` (marcada como `OBSOLETA` en el código) cuando sea oportuno.
-- **Debt Técnica:** `groupItemsByWeek(items, getFecha)` en `planner.js` no tiene ningún llamador (código muerto, quedó de una versión anterior de B.4). Evaluar eliminarla o reaprovecharla; no confundir con `groupByWeek(items)` de `contenido.js`, que sí está en uso.
+
+### ✅ Completados (Patch 22-jun-2026)
+- **Filtros del Planner:** ✅ Implementados filtros por **Estado** (multiselect) y **Rango de Fechas** en todas las vistas (Anual, Calendario, Gantt, Carga de Equipo). El bloque `.pl-adv-filtros` se inyecta via `_renderPlannerView()` en `#pl-adv-wrap`. Funciones: `plToggleEstado`, `plSetFechaIni`, `plSetFechaFin`, `plLimpiarFiltrosAvanzados`, `_plShowPasaFiltros`, `_plContPasaFiltros`, `_plFechaEnRango`, `_plRangoEnFiltro`. No aplica en Kanban (usa su propio toggle).
+- **Debt Técnica:** ✅ `persistContenido()` ya no existía en el código; eliminada la referencia del backlog.
+- **Debt Técnica:** ✅ Eliminada `groupItemsByWeek(items, getFecha)` de `planner.js` (era código muerto sin ningún llamador). No confundir con `groupByWeek(items)` de `contenido.js`, que sí sigue en uso.
 
 ---
 
