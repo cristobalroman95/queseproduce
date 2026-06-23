@@ -800,7 +800,7 @@ function buildPlannerCarga(){
       const c=cargaMap[p.id][per.key];
       const col=plCargaColor(c.count);
       const tip=c.items.length?c.items.join(', '):'Sin carga asignada';
-      return`<td class="pl-carga-cell ${per.isToday?'pl-carga-col-today':''}" style="background:${col.bg};color:${col.txt};" title="${tip.replace(/"/g,'&quot;')}">${c.count||''}${c.viaja?' <span class="pl-carga-viaje" title="Viaja">✈️</span>':''}</td>`;
+      return`<td class="pl-carga-cell ${per.isToday?'pl-carga-col-today':''}" style="background:${col.bg};color:${col.txt};${c.count?'cursor:pointer':''}" title="${tip.replace(/"/g,'&quot;')}" ${c.count?`onclick="plCargaDrilldown(event,'${p.nombre.replace(/'/g,"\\'")}','${per.label}',${JSON.stringify(c.items).replace(/'/g,"\\'")})"`:''} >${c.count||''}${c.viaja?` <span class="pl-carga-viaje" title="Viaja">✈️</span>`:''}</td>`;
     }).join('');
     return`<tr><td class="pl-carga-td-persona"><div class="pl-carga-persona-row">${personaAvatarHTML(p,'pl-carga-av')}<span>${p.nombre}</span></div></td>${cells}</tr>`;
   }).join('');
@@ -811,6 +811,38 @@ function buildPlannerCarga(){
   </div>`;
 
   grid.innerHTML=toggleHTML+`<div class="pl-carga-wrap"><table class="pl-carga-table"><thead><tr><th class="pl-carga-th-persona">Persona</th>${headCols}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+}
+
+// ── DRILL-DOWN CARGA DE EQUIPO ──
+function plCargaDrilldown(e, persona, periodo, items){
+  e.stopPropagation();
+  const prev=document.getElementById('pl-carga-modal'); if(prev)prev.remove();
+  const overlay=document.createElement('div');
+  overlay.id='pl-carga-modal';
+  overlay.className='pl-carga-modal-overlay';
+  const listHTML=items.map(nombre=>{
+    const isShow=nombre.startsWith('🎤 ');
+    const cleanNombre=nombre.replace(/^🎤 /,'');
+    const showIdx=isShow?SHOWS.findIndex(s=>s.nombre===cleanNombre):-1;
+    if(isShow&&showIdx!==-1)
+      return`<div class="pl-carga-drill-item" onclick="document.getElementById('pl-carga-modal').remove();goToShow(${showIdx})">🎤 ${cleanNombre}<span class="pl-carga-drill-go">→</span></div>`;
+    const contItem=!isShow?(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).find(c=>c.nombre===cleanNombre):null;
+    if(contItem)
+      return`<div class="pl-carga-drill-item" onclick="document.getElementById('pl-carga-modal').remove();openCdDetail('${contItem.id}')">${cleanNombre}<span class="pl-carga-drill-go">→</span></div>`;
+    return`<div class="pl-carga-drill-item pl-carga-drill-plain">${nombre}</div>`;
+  }).join('');
+  overlay.innerHTML=`<div class="pl-carga-modal-box">
+    <div class="pl-carga-modal-hdr">
+      <div>
+        <div class="pl-carga-modal-persona">${persona}</div>
+        <div class="pl-carga-modal-periodo">${periodo} · ${items.length} asignación${items.length!==1?'es':''}</div>
+      </div>
+      <button class="pl-carga-modal-close" onclick="document.getElementById('pl-carga-modal').remove()">✕</button>
+    </div>
+    <div class="pl-carga-modal-list">${listHTML}</div>
+  </div>`;
+  overlay.addEventListener('click',ev=>{ if(ev.target===overlay)overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 // ── COORDINACIÓN ──

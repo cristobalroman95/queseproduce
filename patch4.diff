@@ -1,0 +1,102 @@
+From a621bcfe391e1168c6f9ce521fc4e1210a2d64a9 Mon Sep 17 00:00:00 2001
+From: Claude Patch <patch@queseproduce>
+Date: Tue, 23 Jun 2026 02:36:02 +0000
+Subject: [PATCH] feat: drill-down carga de equipo
+
+---
+ css/app.css   | 13 +++++++++++++
+ js/planner.js | 34 +++++++++++++++++++++++++++++++++-
+ roadmap.md    |  2 +-
+ 3 files changed, 47 insertions(+), 2 deletions(-)
+
+diff --git a/css/app.css b/css/app.css
+index d02d59d..f2cd2fc 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -454,6 +454,19 @@ h1,h2,h3,.topbar-title,.land-h1,.sidebar-logo h1,.login-logo{font-family:var(--f
+ .pl-carga-av{width:24px;height:24px;border-radius:50%;background:var(--p100);color:var(--p800);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+ .pl-carga-av img{width:100%;height:100%;object-fit:cover;}
+ .pl-carga-cell{font-weight:700;}
++/* ── CARGA DE EQUIPO: modal drill-down ── */
++.pl-carga-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:900;display:flex;align-items:center;justify-content:center;}
++.pl-carga-modal-box{background:var(--surface2);border:0.5px solid var(--border-soft);border-radius:14px;padding:0;min-width:300px;max-width:420px;width:90%;max-height:70vh;display:flex;flex-direction:column;overflow:hidden;}
++.pl-carga-modal-hdr{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px 14px;border-bottom:0.5px solid var(--border-soft);}
++.pl-carga-modal-persona{font-size:13px;font-weight:700;color:#E4E1F7;}
++.pl-carga-modal-periodo{font-size:11px;color:#9690C2;margin-top:2px;}
++.pl-carga-modal-close{background:none;border:none;color:#888;font-size:16px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;}
++.pl-carga-modal-close:hover{color:#E4E1F7;}
++.pl-carga-modal-list{overflow-y:auto;padding:10px 12px 14px;}
++.pl-carga-drill-item{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:7px;font-size:12px;color:#E4E1F7;cursor:pointer;transition:background .12s;}
++.pl-carga-drill-item:hover:not(.pl-carga-drill-plain){background:rgba(150,144,194,0.15);}
++.pl-carga-drill-plain{cursor:default;color:#bbb;}
++.pl-carga-drill-go{font-size:11px;color:#9690C2;flex-shrink:0;}
+ .pl-carga-viaje{font-size:9px;}
+ .pl-carga-col-today{box-shadow:inset 0 0 0 2px var(--p400);}
+ 
+diff --git a/js/planner.js b/js/planner.js
+index 8b2b6bf..95681eb 100644
+--- a/js/planner.js
++++ b/js/planner.js
+@@ -800,7 +800,7 @@ function buildPlannerCarga(){
+       const c=cargaMap[p.id][per.key];
+       const col=plCargaColor(c.count);
+       const tip=c.items.length?c.items.join(', '):'Sin carga asignada';
+-      return`<td class="pl-carga-cell ${per.isToday?'pl-carga-col-today':''}" style="background:${col.bg};color:${col.txt};" title="${tip.replace(/"/g,'&quot;')}">${c.count||''}${c.viaja?' <span class="pl-carga-viaje" title="Viaja">✈️</span>':''}</td>`;
++      return`<td class="pl-carga-cell ${per.isToday?'pl-carga-col-today':''}" style="background:${col.bg};color:${col.txt};${c.count?'cursor:pointer':''}" title="${tip.replace(/"/g,'&quot;')}" ${c.count?`onclick="plCargaDrilldown(event,'${p.nombre.replace(/'/g,"\\'")}','${per.label}',${JSON.stringify(c.items).replace(/'/g,"\\'")})"`:''} >${c.count||''}${c.viaja?` <span class="pl-carga-viaje" title="Viaja">✈️</span>`:''}</td>`;
+     }).join('');
+     return`<tr><td class="pl-carga-td-persona"><div class="pl-carga-persona-row">${personaAvatarHTML(p,'pl-carga-av')}<span>${p.nombre}</span></div></td>${cells}</tr>`;
+   }).join('');
+@@ -813,6 +813,38 @@ function buildPlannerCarga(){
+   grid.innerHTML=toggleHTML+`<div class="pl-carga-wrap"><table class="pl-carga-table"><thead><tr><th class="pl-carga-th-persona">Persona</th>${headCols}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+ }
+ 
++// ── DRILL-DOWN CARGA DE EQUIPO ──
++function plCargaDrilldown(e, persona, periodo, items){
++  e.stopPropagation();
++  const prev=document.getElementById('pl-carga-modal'); if(prev)prev.remove();
++  const overlay=document.createElement('div');
++  overlay.id='pl-carga-modal';
++  overlay.className='pl-carga-modal-overlay';
++  const listHTML=items.map(nombre=>{
++    const isShow=nombre.startsWith('🎤 ');
++    const cleanNombre=nombre.replace(/^🎤 /,'');
++    const showIdx=isShow?SHOWS.findIndex(s=>s.nombre===cleanNombre):-1;
++    if(isShow&&showIdx!==-1)
++      return`<div class="pl-carga-drill-item" onclick="document.getElementById('pl-carga-modal').remove();goToShow(${showIdx})">🎤 ${cleanNombre}<span class="pl-carga-drill-go">→</span></div>`;
++    const contItem=!isShow?(typeof CONTENIDO!=='undefined'?CONTENIDO:[]).find(c=>c.nombre===cleanNombre):null;
++    if(contItem)
++      return`<div class="pl-carga-drill-item" onclick="document.getElementById('pl-carga-modal').remove();openCdDetail('${contItem.id}')">${cleanNombre}<span class="pl-carga-drill-go">→</span></div>`;
++    return`<div class="pl-carga-drill-item pl-carga-drill-plain">${nombre}</div>`;
++  }).join('');
++  overlay.innerHTML=`<div class="pl-carga-modal-box">
++    <div class="pl-carga-modal-hdr">
++      <div>
++        <div class="pl-carga-modal-persona">${persona}</div>
++        <div class="pl-carga-modal-periodo">${periodo} · ${items.length} asignación${items.length!==1?'es':''}</div>
++      </div>
++      <button class="pl-carga-modal-close" onclick="document.getElementById('pl-carga-modal').remove()">✕</button>
++    </div>
++    <div class="pl-carga-modal-list">${listHTML}</div>
++  </div>`;
++  overlay.addEventListener('click',ev=>{ if(ev.target===overlay)overlay.remove(); });
++  document.body.appendChild(overlay);
++}
++
+ // ── COORDINACIÓN ──
+ function coordFilter(f,btn){
+   coordActiveFilter=f;
+diff --git a/roadmap.md b/roadmap.md
+index de80b2c..d06f8f8 100644
+--- a/roadmap.md
++++ b/roadmap.md
+@@ -120,7 +120,7 @@ El Planner tiene las 5 vistas planeadas implementadas (📅 Anual / 🗓 Calenda
+ 
+ ## 🔧 Mejoras Transversales (Backlog Técnico)
+ - **Edición inline en Gantt:** Implementar clic en barra → `input date` inline para mover fechas sin abrir el detalle (ver nota en sección B.3).
+-- **Drill-down en Carga de Equipo:** Hoy el detalle de una celda solo se ve en el `title` (tooltip nativo). Podría mejorarse con un clic que abra un modal/lista con los shows y piezas de ese período (ver nota en sección B.5).
++- **Drill-down en Carga de Equipo:** ✅ Clic en celda con carga > 0 abre modal `#pl-carga-modal` con lista clickeable de shows/piezas del período. Función: `plCargaDrilldown()`.
+ 
+ ### ✅ Completados (Patch 22-jun-2026)
+ - **Filtros del Planner:** ✅ Implementados filtros por **Estado** (multiselect) y **Rango de Fechas** en todas las vistas (Anual, Calendario, Gantt, Carga de Equipo). El bloque `.pl-adv-filtros` se inyecta via `_renderPlannerView()` en `#pl-adv-wrap`. Funciones: `plToggleEstado`, `plSetFechaIni`, `plSetFechaFin`, `plLimpiarFiltrosAvanzados`, `_plShowPasaFiltros`, `_plContPasaFiltros`, `_plFechaEnRango`, `_plRangoEnFiltro`. No aplica en Kanban (usa su propio toggle).
+-- 
+2.43.0
