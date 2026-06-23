@@ -173,7 +173,6 @@ function buildPlanner() {
   grid.innerHTML = MESES.map((mes, mi) => {
     const mShows = showFilter ? SHOWS.map((s, realIdx) => ({ s, realIdx })).filter(o => {
       if (!_plShowPasaFiltros(o.s)) return false;
-      // include if any date (prepro, pro, show, extras) falls in this month
       const dates = [o.s.fechaPreproduccion, o.s.fechaProduccion, o.s.fecha, ...(o.s.fechasExtra||[]).map(fe=>fe.fecha)].filter(Boolean);
       return dates.some(d => parseInt(d.split("-")[1]) === mi + 1);
     }) : [];
@@ -182,35 +181,59 @@ function buildPlanner() {
       if (!_plContPasaFiltros(c)) return false;
       return parseInt(c.fecha.split("-")[1]) === mi + 1;
     }) : [];
-    // Expand shows to one entry per date that falls this month
+    
     const expandedShows = [];
     mShows.forEach(o => {
       const { s, realIdx } = o;
+      // Preparamos el HTML del equipo + botón para inyectar en la tarjeta
+      const equipoHTML = `
+        <div style="display:flex; align-items:center; gap:4px; margin-top:4px;">
+          ${equipoStackHTML('show', s.id, 3)}
+          <button class="btn" style="font-size:7px; padding:1px 4px;" 
+                  onclick="event.stopPropagation(); openQuickTeam('show', ${s.id}, '${s.nombre.replace(/'/g, "\\'")}')">
+            ✏️
+          </button>
+        </div>
+      `;
       const addEntry = (dateStr, icon, note) => {
         if (!dateStr) return;
         if (parseInt(dateStr.split("-")[1]) !== mi + 1) return;
-        expandedShows.push({ type: 'show', day: parseInt(dateStr.split("-")[2]), data: { s, realIdx, dateStr, icon, note } });
+        expandedShows.push({ 
+          type: 'show', 
+          day: parseInt(dateStr.split("-")[2]), 
+          data: { s, realIdx, dateStr, icon, note, equipoHTML } 
+        });
       };
       if (s.fechaPreproduccion) addEntry(s.fechaPreproduccion, '📋', 'Inicio preproducción');
       if (s.fechaProduccion) addEntry(s.fechaProduccion, '🎬', 'Inicio producción');
       if (s.fecha) addEntry(s.fecha, '🎤', null);
       (s.fechasExtra||[]).forEach((fe,feIdx)=>{ if(fe.fecha) addEntry(fe.fecha,'📅', fe.nota||('Función '+(feIdx+2))); });
     });
-    const combined = [...expandedShows,
+    
+    const combined = [
+      ...expandedShows,
       ...mCont.map(c => ({ type: 'content', day: parseInt(c.fecha.split("-")[2]), data: c }))
     ].sort((a, b) => a.day - b.day);
+    
     const inner = combined.length ? combined.map(entry => {
       if (entry.type === 'show') {
-        const { s, realIdx, dateStr, icon, note } = entry.data;
+        const { s, realIdx, dateStr, icon, note, equipoHTML } = entry.data;
         const c = showColor(s.tipo, s.estado);
         const dia = dateStr ? dateStr.split("-")[2] : "??";
         const nameDisplay = note ? `<span style="font-size:9px;opacity:0.75;">${note}</span><br>${s.nombre}` : s.nombre;
         const bgOpacity = icon === '📋' ? '55' : icon === '🎬' ? '99' : '';
-        return `<div class="cal-show" style="background:${c.bg}${bgOpacity};color:${c.txt};${icon!=='🎤'?'border:1px dashed '+c.txt+'88;':''}" onclick="goToShow(${realIdx})" title="${icon} ${note||s.nombre} · ${s.nombre.replace(/"/g, '&quot;')}"><div class="cs-date">${icon} Día ${dia}</div><div class="cs-name">${nameDisplay}</div></div>`;
+        return `<div class="cal-show" style="background:${c.bg}${bgOpacity};color:${c.txt};${icon!=='🎤'?'border:1px dashed '+c.txt+'88;':''}" onclick="goToShow(${realIdx})" title="${icon} ${note||s.nombre} · ${s.nombre.replace(/"/g, '&quot;')}">
+          <div class="cs-date">${icon} Día ${dia}</div>
+          <div class="cs-name">${nameDisplay}</div>
+          ${equipoHTML}
+        </div>`;
       } else {
         const item = entry.data;
         const dia = item.fecha ? item.fecha.split("-")[2] : "??";
-        return `<div class="cal-content" onclick="openCdDetail('${item.id}')" title="Ver ${item.nombre.replace(/"/g, '&quot;')}"><div class="cc-meta"><span>🎬 Día ${dia}</span><span>${cdEstEmoji(item.estado)}</span></div><div class="cc-name">${item.nombre}</div></div>`;
+        return `<div class="cal-content" onclick="openCdDetail('${item.id}')" title="Ver ${item.nombre.replace(/"/g, '&quot;')}">
+          <div class="cc-meta"><span>🎬 Día ${dia}</span><span>${cdEstEmoji(item.estado)}</span></div>
+          <div class="cc-name">${item.nombre}</div>
+        </div>`;
       }
     }).join("") : `<div style="padding:10px 8px;font-size:10px;color:#ddd;font-style:italic;">Sin eventos</div>`;
     return `<div class="month-block"><div class="month-name">${mes}</div><div class="month-shows">${inner}</div></div>`;
@@ -929,7 +952,6 @@ function buildPlannerKanban() {
   grid.innerHTML = toggleHTML + `<div class="pl-kanban-cols">${colsHTML}</div>`;
 }
 function plKanbanShowCard(s, realIdx, canEdit) {
-  const equipo = equipoStackHTML('show', s.id, 3);
   const dragAttrs = canEdit ? `draggable="true" ondragstart="plKanbanDragStart(event,'show',${realIdx})" ondragend="plKanbanDragEnd(event)"` : '';
   const extraFns = (s.fechasExtra||[]).filter(fe=>fe.fecha);
   const fechasStr = s.fecha ? fmtDate(s.fecha) + (extraFns.length ? ' +'+extraFns.length+' fcn.' : '') : 'Sin fecha';
@@ -939,7 +961,13 @@ function plKanbanShowCard(s, realIdx, canEdit) {
     <div class="pl-kanban-card-nombre">🎤 ${s.nombre}</div>
     ${preproLine}${proLine}
     <div class="pl-kanban-card-meta"><span>🎤 ${fechasStr}</span></div>
-    <div class="pl-kanban-card-meta">${equipo}</div>
+    <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+      ${equipoStackHTML('show', s.id, 3)}
+      <button class="btn" style="font-size:8px; padding:1px 5px;" 
+              onclick="event.stopPropagation(); openQuickTeam('show', ${s.id}, '${s.nombre.replace(/'/g, "\\'")}')">
+        ✏️
+      </button>
+    </div>
   </div>`;
 }
 function plKanbanContenidoCard(item, canEdit) {

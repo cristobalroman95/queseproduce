@@ -154,37 +154,102 @@ function closeLightbox(e){ if(e&&e.target!==document.getElementById("media-light
 function lbNav(dir){ const next=(_lbIdx+dir+_lbPhotos.length)%_lbPhotos.length; openLightbox(next); }
 document.addEventListener("keydown",e=>{ const lb=document.getElementById("media-lightbox"); if(!lb.classList.contains("open"))return; if(e.key==="Escape")closeLightbox({target:lb}); if(e.key==="ArrowRight")lbNav(1); if(e.key==="ArrowLeft")lbNav(-1); });
 
-// equipo.js – al final
+// ── SELECTOR RÁPIDO DE EQUIPO ──
+let _quickTeamEntityType = null;
+let _quickTeamEntityId = null;
+
+function openQuickTeam(entityType, entityId, entityName) {
+  _quickTeamEntityType = entityType;
+  _quickTeamEntityId = entityId;
+
+  const title = document.getElementById('qt-modal-title');
+  if (title) title.textContent = `Equipo de ${entityName || 'este elemento'}`;
+
+  const body = document.getElementById('qt-modal-body');
+  if (!body) { toast('⚠️ Error: no se encontró el modal'); return; }
+
+  const personas = PERSONAS.filter(p => p.activo);
+  if (!personas.length) {
+    body.innerHTML = '<p style="color:#aaa;padding:20px;">No hay personas activas en el equipo.</p>';
+  } else {
+    const asignaciones = getAsignaciones(entityType, entityId);
+    const asignadasIds = new Set(asignaciones.map(a => a.personaId));
+
+    body.innerHTML = personas.map(p => `
+      <label style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border-soft);cursor:pointer;">
+        <input type="checkbox" value="${p.id}" ${asignadasIds.has(p.id) ? 'checked' : ''}>
+        <span>${p.nombre} ${p.cargo ? '· ' + p.cargo : ''}</span>
+      </label>
+    `).join('');
+  }
+
+  const modal = document.getElementById('quick-team-modal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeQuickTeam() {
+  const modal = document.getElementById('quick-team-modal');
+  if (modal) modal.classList.remove('open');
+  _quickTeamEntityType = null;
+  _quickTeamEntityId = null;
+}
+
+function closeQuickTeamOvl(e) {
+  if (e.target === document.getElementById('quick-team-modal')) closeQuickTeam();
+}
+
+async function saveQuickTeam() {
+  if (!_quickTeamEntityType || !_quickTeamEntityId) {
+    toast('⚠️ No se ha seleccionado un elemento');
+    return;
+  }
+
+  const body = document.getElementById('qt-modal-body');
+  const checks = body.querySelectorAll('input[type="checkbox"]');
+  const selectedIds = [];
+  checks.forEach(cb => { if (cb.checked) selectedIds.push(parseInt(cb.value)); });
+
+  const items = selectedIds.map(id => ({
+    personaId: id,
+    rol: '',
+    tarea: '',
+    viaja: false
+  }));
+
+  const ok = await persistAsignaciones(_quickTeamEntityType, _quickTeamEntityId, items);
+  if (!ok) {
+    toast('⚠️ Error guardando equipo');
+    return;
+  }
+
+  toast('✅ Equipo actualizado');
+  closeQuickTeam();
+  refreshAllTeamViews();
+}
+
 function refreshAllTeamViews() {
-  // Si la sección "Shows" está visible, reconstruir tabla
   const secShows = document.getElementById('sec-shows');
-  if (secShows && secShows.classList.contains('active')) {
-    buildShows();
-  }
-  // Si la sección "Dashboard" está visible
+  if (secShows && secShows.classList.contains('active')) buildShows();
+
   const secDash = document.getElementById('sec-dashboard');
-  if (secDash && secDash.classList.contains('active')) {
-    buildDash();
-  }
-  // Si la sección "Coordinación" está visible
+  if (secDash && secDash.classList.contains('active')) buildDash();
+
   const secCoord = document.getElementById('sec-coordinacion');
-  if (secCoord && secCoord.classList.contains('active')) {
-    buildCoordinacion();
-  }
-  // Si el Planner está visible, refrescar vista actual
+  if (secCoord && secCoord.classList.contains('active')) buildCoordinacion();
+
   const secPlanner = document.getElementById('sec-planner');
   if (secPlanner && secPlanner.classList.contains('active')) {
-    _renderPlannerView();  // definida en planner.js
+    if (typeof _renderPlannerView === 'function') _renderPlannerView();
   }
-  // Si el panel de detalle de un show está abierto y muestra equipo
+
   const panelOpen = document.getElementById('panel-overlay')?.classList.contains('open');
-  if (panelOpen && panelActiveTab === 'equipo' && activeShowIdx !== null) {
+  if (panelOpen && typeof panelActiveTab !== 'undefined' && panelActiveTab === 'equipo' && typeof activeShowIdx !== 'undefined' && activeShowIdx !== null) {
     panelTab('equipo', activeShowIdx);
   }
-  // Si el detalle completo (full-detail) está abierto y muestra equipo
-  if (fullDetailIdx !== null && fullDetailActiveTab === 'equipo') {
+
+  if (typeof fullDetailIdx !== 'undefined' && fullDetailIdx !== null && typeof fullDetailActiveTab !== 'undefined' && fullDetailActiveTab === 'equipo') {
     fullDetailTab('equipo');
   }
-  // También refrescar la vista de equipo general (personas)
+
   buildEquipo();
 }
